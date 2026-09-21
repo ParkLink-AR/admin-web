@@ -181,6 +181,50 @@ async function fetchMonthlyRevenue(token) {
   return buckets;
 }
 
+// ── Support tickets (always real API calls -- there's no realistic mock data
+// worth faking here, and staff need to see actual tickets to answer them) ────
+
+async function ticketFetch(url, token, options = {}) {
+  const res = await fetch(url, {
+    ...options,
+    headers: { ...authHeaders(token), ...(options.headers || {}) },
+    signal: AbortSignal.timeout(8000),
+  });
+  if (!res.ok) {
+    const detail = await res.json().catch(() => ({}));
+    throw new Error(detail.error || `HTTP ${res.status}`);
+  }
+  if (res.status === 204) return null;
+  return res.json();
+}
+
+function fetchAdminTickets(token, status) {
+  const qs = status ? `?status=${encodeURIComponent(status)}` : "";
+  return ticketFetch(`${CONFIG.GATEWAY_URL}/admin/tickets${qs}`, token);
+}
+
+function fetchAdminTicket(token, ticketId) {
+  return ticketFetch(`${CONFIG.GATEWAY_URL}/admin/tickets/${ticketId}`, token);
+}
+
+function fetchAdminTicketMessages(token, ticketId) {
+  return ticketFetch(`${CONFIG.GATEWAY_URL}/admin/tickets/${ticketId}/messages`, token);
+}
+
+function postAdminTicketReply(token, ticketId, body) {
+  return ticketFetch(`${CONFIG.GATEWAY_URL}/admin/tickets/${ticketId}/messages`, token, {
+    method: "POST",
+    body: JSON.stringify({ body }),
+  });
+}
+
+function updateAdminTicketStatus(token, ticketId, status) {
+  return ticketFetch(`${CONFIG.GATEWAY_URL}/admin/tickets/${ticketId}/status`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+}
+
 // ── Master loader ─────────────────────────────────────────────────────────────
 
 async function loadAllMetrics(token) {
