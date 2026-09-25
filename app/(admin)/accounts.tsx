@@ -11,6 +11,7 @@ import {
   TouchableWithoutFeedback,
   ViewStyle,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/src/components/Screen';
 import { PageHeader } from '@/src/components/PageHeader';
 import { Button } from '@/src/components/Button';
@@ -55,6 +56,7 @@ export default function AdminAccounts() {
   const [createVisible, setCreateVisible] = useState(false);
   const [newUsername, setNewUsername] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [newPasswordConfirm, setNewPasswordConfirm] = useState('');
   const [newRole, setNewRole] = useState<AdminAccountRole>('ADMIN');
   const [createSubmitting, setCreateSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
@@ -65,6 +67,7 @@ export default function AdminAccounts() {
 
   const [passwordTarget, setPasswordTarget] = useState<AdminAccount | null>(null);
   const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [newAdminPasswordConfirm, setNewAdminPasswordConfirm] = useState('');
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
 
@@ -96,6 +99,7 @@ export default function AdminAccounts() {
   function openCreate() {
     setNewUsername('');
     setNewPassword('');
+    setNewPasswordConfirm('');
     setNewRole('ADMIN');
     setCreateError(null);
     setCreateVisible(true);
@@ -105,6 +109,10 @@ export default function AdminAccounts() {
     const username = newUsername.trim();
     if (!username || !newPassword) {
       setCreateError('Ingresá un usuario y una contraseña.');
+      return;
+    }
+    if (newPassword !== newPasswordConfirm) {
+      setCreateError('Las contraseñas no coinciden.');
       return;
     }
     setCreateSubmitting(true);
@@ -143,6 +151,7 @@ export default function AdminAccounts() {
   function askChangePassword(account: AdminAccount) {
     setPasswordError(null);
     setNewAdminPassword('');
+    setNewAdminPasswordConfirm('');
     setPasswordTarget(account);
   }
 
@@ -150,6 +159,10 @@ export default function AdminAccounts() {
     if (!passwordTarget) return;
     if (!newAdminPassword) {
       setPasswordError('Ingresá una contraseña nueva.');
+      return;
+    }
+    if (newAdminPassword !== newAdminPasswordConfirm) {
+      setPasswordError('Las contraseñas no coinciden.');
       return;
     }
     setPasswordSubmitting(true);
@@ -168,13 +181,16 @@ export default function AdminAccounts() {
     return (
       <Pressable
         onPress={() => askChangePassword(account)}
+        // @ts-expect-error -- `title` isn't in RN's Pressable types, but react-native-web
+        // forwards unknown props to the underlying DOM node, giving a free native tooltip.
+        title="Cambiar contraseña"
         style={({ hovered }: PressableState) => [
-          styles.passwordBtn,
-          hovered && styles.passwordBtnHovered,
+          styles.iconBtn,
+          hovered && styles.iconBtnHovered,
           CURSOR_POINTER,
         ]}
       >
-        <Text style={styles.passwordBtnText}>Cambiar contraseña</Text>
+        <Ionicons name="key-outline" size={16} color={colors.text} />
       </Pressable>
     );
   }
@@ -187,16 +203,20 @@ export default function AdminAccounts() {
     return (
       <Pressable
         onPress={() => askToggle(account)}
+        // @ts-expect-error -- see ChangePasswordButton's title prop above.
+        title={account.isActive ? 'Desactivar' : 'Activar'}
         style={({ hovered }: PressableState) => [
-          styles.toggleBtn,
-          account.isActive ? styles.toggleBtnDeactivate : styles.toggleBtnActivate,
-          hovered && (account.isActive ? styles.toggleBtnDeactivateHovered : styles.toggleBtnActivateHovered),
+          styles.iconBtn,
+          account.isActive ? styles.iconBtnDanger : styles.iconBtnSuccess,
+          hovered && (account.isActive ? styles.iconBtnDangerHovered : styles.iconBtnSuccessHovered),
           CURSOR_POINTER,
         ]}
       >
-        <Text style={[styles.toggleBtnText, account.isActive ? styles.toggleBtnTextDeactivate : styles.toggleBtnTextActivate]}>
-          {account.isActive ? 'Desactivar' : 'Activar'}
-        </Text>
+        <Ionicons
+          name={account.isActive ? 'ban-outline' : 'checkmark-circle-outline'}
+          size={16}
+          color={account.isActive ? colors.danger : colors.success}
+        />
       </Pressable>
     );
   }
@@ -312,6 +332,16 @@ export default function AdminAccounts() {
                   placeholderTextColor={colors.textSecondary}
                 />
 
+                <Text style={styles.fieldLabel}>Confirmar contraseña</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newPasswordConfirm}
+                  onChangeText={setNewPasswordConfirm}
+                  secureTextEntry
+                  placeholder="Repetí la contraseña"
+                  placeholderTextColor={colors.textSecondary}
+                />
+
                 <Text style={styles.fieldLabel}>Rol</Text>
                 <View style={styles.roleRow}>
                   {(['ADMIN', 'SUPERADMIN'] as AdminAccountRole[]).map((role) => (
@@ -410,6 +440,15 @@ export default function AdminAccounts() {
                   placeholder="Contraseña nueva"
                   placeholderTextColor={colors.textSecondary}
                 />
+                <Text style={styles.fieldLabel}>Confirmar contraseña</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newAdminPasswordConfirm}
+                  onChangeText={setNewAdminPasswordConfirm}
+                  secureTextEntry
+                  placeholder="Repetí la contraseña"
+                  placeholderTextColor={colors.textSecondary}
+                />
                 {passwordError ? <Text style={styles.error}>{passwordError}</Text> : null}
                 <View style={styles.modalActions}>
                   <Pressable
@@ -479,22 +518,23 @@ const styles = StyleSheet.create({
   colRole: { flex: 1 },
   colStatus: { flex: 1 },
   colDate: { flex: 2 },
-  colAction: { flex: 2, alignItems: 'flex-start' },
-  actionGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-
-  passwordBtn: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, backgroundColor: colors.white, borderColor: colors.border },
-  passwordBtnHovered: { backgroundColor: colors.background },
-  passwordBtnText: { fontSize: 12, fontWeight: '700', color: colors.text },
+  colAction: { flex: 1, alignItems: 'flex-start' },
+  actionGroup: { flexDirection: 'row', alignItems: 'center', gap: 6 },
 
   selfNote: { fontSize: 12, color: colors.textSecondary, fontStyle: 'italic' },
-  toggleBtn: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1 },
-  toggleBtnActivate: { backgroundColor: colors.white, borderColor: colors.success },
-  toggleBtnActivateHovered: { backgroundColor: '#EAF7EE' },
-  toggleBtnDeactivate: { backgroundColor: colors.white, borderColor: colors.danger },
-  toggleBtnDeactivateHovered: { backgroundColor: '#FDEDED' },
-  toggleBtnText: { fontSize: 12, fontWeight: '700' },
-  toggleBtnTextActivate: { color: colors.success },
-  toggleBtnTextDeactivate: { color: colors.danger },
+
+  // Compact icon-only action buttons -- a hover tint plus the native `title` tooltip
+  // (see ChangePasswordButton/ToggleButton) says what each one does without needing
+  // a text label taking up row space.
+  iconBtn: {
+    width: 30, height: 30, borderRadius: 8, borderWidth: 1, borderColor: colors.border,
+    backgroundColor: colors.white, alignItems: 'center', justifyContent: 'center',
+  },
+  iconBtnHovered: { backgroundColor: colors.background },
+  iconBtnSuccess: { borderColor: colors.success },
+  iconBtnSuccessHovered: { backgroundColor: '#EAF7EE' },
+  iconBtnDanger: { borderColor: colors.danger },
+  iconBtnDangerHovered: { backgroundColor: '#FDEDED' },
 
   // Small centered dialogs (not full-screen takeovers) for the create form
   // and the activate/deactivate confirm -- matches PayoutDetailPanel and
