@@ -2,9 +2,8 @@ import { useSessionStore } from '@/src/store/useSessionStore';
 
 export const API_URL = process.env.EXPO_PUBLIC_API_URL ?? 'http://localhost:8080';
 
-// Retrying a failed login with a rotated token is meaningless, and
-// /auth/refresh retrying itself would loop -- mirrors mobile/src/api/client.ts.
-const NO_RETRY_PATHS = ['/auth/login', '/auth/refresh'];
+// Retrying a failed login with the same rejected credentials is meaningless.
+const NO_RETRY_PATHS = ['/admin/auth/login'];
 
 export class ApiError extends Error {
   status: number;
@@ -46,36 +45,6 @@ async function rawFetch(
   return fetch(`${API_URL}${path}`, { ...options, headers, cache: 'no-store' });
 }
 
-// Shared in-flight refresh promise so concurrent 401s don't race each other
-// into rotating the refresh token twice -- mirrors mobile/src/api/client.ts.
-let refreshInFlight: Promise<string | null> | null = null;
-
-async function refreshSession(): Promise<string | null> {
-  if (refreshInFlight) return refreshInFlight;
-
-  refreshInFlight = (async () => {
-    const { refreshToken, setTokens } = useSessionStore.getState();
-    if (!refreshToken) return null;
-
-    const response = await rawFetch(
-      '/auth/refresh',
-      { method: 'POST', body: JSON.stringify({ refresh_token: refreshToken }) },
-      null
-    );
-    if (!response.ok) return null;
-
-    const data = await response.json();
-    setTokens({ accessToken: data.access_token, refreshToken: data.refresh_token });
-    return data.access_token as string;
-  })();
-
-  try {
-    return await refreshInFlight;
-  } finally {
-    refreshInFlight = null;
-  }
-}
-
 export async function request<T>(
   path: string,
   options: RequestInit = {},
@@ -90,19 +59,15 @@ export async function request<T>(
   }
 
   const { accessToken } = useSessionStore.getState();
-  let response = await rawFetch(path, options, accessToken);
+  const response = await rawFetch(path, options, accessToken);
 
+  // Admin sessions don't have a refresh token to rotate -- a 401 on an
+  // authenticated request just means the access token expired or was
+  // revoked, so the session is cleared and the router (reacting to `user`
+  // becoming null) redirects to login. Worst case the admin re-logs in.
   if (response.status === 401 && accessToken && !NO_RETRY_PATHS.includes(path)) {
-    const newToken = await refreshSession();
-    if (newToken) {
-      response = await rawFetch(path, options, newToken);
-    } else {
-      useSessionStore.getState().clearSession();
-      // Session is gone; the router reacts to `user` becoming null and
-      // redirects to login. Admin sessions don't need a stricter interceptor
-      // than this -- worst case the admin re-logs in.
-      return undefined as T;
-    }
+    useSessionStore.getState().clearSession();
+    return undefined as T;
   }
 
   if (!response.ok) {
@@ -128,16 +93,11 @@ async function rawMultipartFetch(
 
 export async function requestMultipart<T>(path: string, formData: FormData): Promise<T> {
   const { accessToken } = useSessionStore.getState();
-  let response = await rawMultipartFetch(path, formData, accessToken);
+  const response = await rawMultipartFetch(path, formData, accessToken);
 
   if (response.status === 401 && accessToken) {
-    const newToken = await refreshSession();
-    if (newToken) {
-      response = await rawMultipartFetch(path, formData, newToken);
-    } else {
-      useSessionStore.getState().clearSession();
-      return undefined as T;
-    }
+    useSessionStore.getState().clearSession();
+    return undefined as T;
   }
 
   if (!response.ok) {

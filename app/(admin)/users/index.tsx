@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, TextInput, FlatList, Pressable, StyleSheet, ActivityIndicator, ViewStyle } from 'react-native';
 import { router } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { PageHeader } from '@/src/components/PageHeader';
@@ -9,6 +9,9 @@ import { searchUsers } from '@/src/api/admin';
 import { AdminUserSummary } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
+
+type PressableState = { pressed: boolean; hovered?: boolean };
+const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
 
 function displayName(u: AdminUserSummary) {
   const name = [u.firstName, u.lastName].filter(Boolean).join(' ');
@@ -89,7 +92,10 @@ export default function UsersSearch() {
               data={results}
               keyExtractor={(u) => u.id}
               renderItem={({ item }) => (
-                <Pressable onPress={() => openUser(item.id)} style={styles.tableRow}>
+                <Pressable
+                  onPress={() => openUser(item.id)}
+                  style={({ hovered }: PressableState) => [styles.tableRow, hovered && styles.tableRowHovered, CURSOR_POINTER]}
+                >
                   <Text style={[styles.td, styles.colName]} numberOfLines={1}>{displayName(item)}</Text>
                   <Text style={[styles.tdSecondary, styles.colEmail]} numberOfLines={1}>{item.email}</Text>
                   <View style={styles.colType}>
@@ -174,11 +180,12 @@ const styles = StyleSheet.create({
   tableRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     paddingHorizontal: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
   },
+  tableRowHovered: { backgroundColor: colors.background },
   td: { fontSize: 14, color: colors.text, fontWeight: '600' },
   tdSecondary: { fontSize: 13, color: colors.textSecondary },
   colName: { flex: 2 },

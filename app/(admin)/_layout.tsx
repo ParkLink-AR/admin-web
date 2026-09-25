@@ -1,15 +1,17 @@
 import { Redirect, Slot, router, usePathname } from 'expo-router';
-import { View, Text, Pressable, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ScrollView, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/src/store/useSessionStore';
 import { colors } from '@/src/theme/colors';
-import { logout } from '@/src/api/auth';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
 
-const NAV_ITEMS: { href: string; match: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+type PressableState = { pressed: boolean; hovered?: boolean };
+
+const NAV_ITEMS: { href: string; match: string; label: string; icon: keyof typeof Ionicons.glyphMap; superadminOnly?: boolean }[] = [
   { href: '/(admin)/home', match: '/home', label: 'Inicio', icon: 'home' },
   { href: '/(admin)/users', match: '/users', label: 'Buscar usuarios', icon: 'people' },
   { href: '/(admin)/payouts', match: '/payouts', label: 'Pagos pendientes', icon: 'cash' },
+  { href: '/(admin)/accounts', match: '/accounts', label: 'Administradores', icon: 'shield-checkmark', superadminOnly: true },
   { href: '/(admin)/settings', match: '/settings', label: 'Configuración', icon: 'settings' },
 ];
 
@@ -22,7 +24,6 @@ const NAV_ITEMS: { href: string; match: string; label: string; icon: keyof typeo
 export default function AdminLayout() {
   const user = useSessionStore((s) => s.user);
   const hydrated = useSessionStore((s) => s.hydrated);
-  const refreshToken = useSessionStore((s) => s.refreshToken);
   const clearSession = useSessionStore((s) => s.clearSession);
   const pathname = usePathname();
   const isDesktop = useIsDesktop();
@@ -30,8 +31,11 @@ export default function AdminLayout() {
   if (!hydrated) return null;
   if (!user) return <Redirect href="/(auth)/login" />;
 
-  async function handleLogout() {
-    if (refreshToken) await logout(refreshToken);
+  const navItems = NAV_ITEMS.filter((item) => !item.superadminOnly || user.role === 'SUPERADMIN');
+
+  // Admin sessions have no refresh token to revoke server-side (see
+  // src/api/auth.ts) -- logging out is purely a client-side action.
+  function handleLogout() {
     clearSession();
     router.replace('/(auth)/login');
   }
@@ -46,16 +50,21 @@ export default function AdminLayout() {
         <View style={styles.sidebar}>
           <View>
             <Text style={styles.brand}>ParkLink Admin</Text>
-            <Text style={styles.brandEmail} numberOfLines={1}>{user.email}</Text>
+            <Text style={styles.brandUsername} numberOfLines={1}>{user.username}</Text>
           </View>
           <View style={styles.sidebarNav}>
-            {NAV_ITEMS.map((item) => {
+            {navItems.map((item) => {
               const active = isActive(item.match);
               return (
                 <Pressable
                   key={item.href}
                   onPress={() => router.push(item.href as never)}
-                  style={[styles.sidebarItem, active && styles.sidebarItemActive]}
+                  style={({ hovered }: PressableState) => [
+                    styles.sidebarItem,
+                    active && styles.sidebarItemActive,
+                    hovered && !active && styles.sidebarItemHovered,
+                    { cursor: 'pointer' } as unknown as ViewStyle,
+                  ]}
                 >
                   <Ionicons name={item.icon} size={18} color={active ? colors.white : colors.textSecondary} />
                   <Text style={[styles.sidebarItemText, active && styles.sidebarItemTextActive]}>{item.label}</Text>
@@ -63,7 +72,14 @@ export default function AdminLayout() {
               );
             })}
           </View>
-          <Pressable onPress={handleLogout} style={styles.sidebarLogout}>
+          <Pressable
+            onPress={handleLogout}
+            style={({ hovered }: PressableState) => [
+              styles.sidebarLogout,
+              hovered && styles.sidebarLogoutHovered,
+              { cursor: 'pointer' } as unknown as ViewStyle,
+            ]}
+          >
             <Ionicons name="log-out-outline" size={18} color={colors.danger} />
             <Text style={styles.sidebarLogoutText}>Cerrar sesión</Text>
           </Pressable>
@@ -89,7 +105,7 @@ export default function AdminLayout() {
         style={styles.mobileNavScroll}
         contentContainerStyle={styles.mobileNav}
       >
-        {NAV_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const active = isActive(item.match);
           return (
             <Pressable
@@ -121,13 +137,15 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   brand: { color: colors.white, fontSize: 17, fontWeight: '700' },
-  brandEmail: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 4 },
+  brandUsername: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 4 },
   sidebarNav: { gap: 4, marginTop: 32 },
-  sidebarItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 12, borderRadius: 8 },
+  sidebarItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 8 },
   sidebarItemActive: { backgroundColor: 'rgba(255,255,255,0.12)' },
+  sidebarItemHovered: { backgroundColor: 'rgba(255,255,255,0.06)' },
   sidebarItemText: { color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '600' },
   sidebarItemTextActive: { color: colors.white },
-  sidebarLogout: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 12 },
+  sidebarLogout: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 8 },
+  sidebarLogoutHovered: { backgroundColor: 'rgba(220, 38, 38, 0.1)' },
   sidebarLogoutText: { color: colors.danger, fontSize: 14, fontWeight: '600' },
   desktopContent: { flex: 1, minWidth: 0 },
 

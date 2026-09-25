@@ -1,21 +1,22 @@
 import { request } from './client';
-import { AdminSessionUser } from '@/src/store/useSessionStore';
+import { AdminSessionUser, AdminRole } from '@/src/store/useSessionStore';
 
 interface LoginInput {
-  email: string;
+  username: string;
   password: string;
 }
 
 interface TokenResponse {
   access_token: string;
-  refresh_token: string;
   token_type: string;
   expires_in: number;
 }
 
+// Admin sessions don't rotate refresh tokens -- POST /admin/auth/login just
+// returns a longer-lived access token. When it expires, the admin logs in
+// again (see src/api/client.ts's 401 handling).
 export interface AuthTokens {
   accessToken: string;
-  refreshToken: string;
   expiresIn: number;
 }
 
@@ -41,9 +42,14 @@ function base64UrlDecode(input: string): string {
 
 // Decodes a JWT payload without verifying it -- the app never trusts this for
 // authorization (the backend re-verifies every request), it's only used to
-// read the `sub` and `role` claims right after login, before the token is
-// stored. Mirrors mobile/src/api/auth.ts's decodeJwtPayload.
-function decodeJwtPayload(token: string): { sub: string; role?: string } {
+// read claims right after login, before the token is stored. Mirrors
+// mobile/src/api/auth.ts's decodeJwtPayload.
+function decodeJwtPayload(token: string): {
+  sub: string;
+  role?: string;
+  admin_role?: AdminRole;
+  admin_username?: string;
+} {
   const payload = token.split('.')[1];
   return JSON.parse(base64UrlDecode(payload));
 }
@@ -54,35 +60,22 @@ function decodeJwtPayload(token: string): { sub: string; role?: string } {
 export class NotAdminError extends Error {}
 
 export async function login(input: LoginInput): Promise<{ user: AdminSessionUser; tokens: AuthTokens }> {
-  const tokenResponse = await request<TokenResponse>('/auth/login', {
+  const tokenResponse = await request<TokenResponse>('/admin/auth/login', {
     method: 'POST',
     body: JSON.stringify(input),
   });
   const tokens: AuthTokens = {
     accessToken: tokenResponse.access_token,
-    refreshToken: tokenResponse.refresh_token,
     expiresIn: tokenResponse.expires_in,
   };
 
-  const { sub, role } = decodeJwtPayload(tokens.accessToken);
-  if (role !== 'admin') {
-    // Technically a valid token, but this tool is staff-only -- refuse
-    // client-side and never store it.
+  const { sub, role, admin_role, admin_username } = decodeJwtPayload(tokens.accessToken);
+  if (role !== 'admin' || !admin_role || !admin_username) {
+    // Technically a valid token, but this tool is admin-only -- refuse
+    // client-side and never store it. Kept as defense-in-depth even though
+    // /admin/auth/login should never issue a token without these claims.
     throw new NotAdminError('Esta cuenta no tiene permisos de administrador.');
   }
 
-  return { user: { id: sub, email: input.email }, tokens };
-}
-
-export async function logout(refreshToken: string): Promise<void> {
-  try {
-    await request('/auth/logout', {
-      method: 'POST',
-      body: JSON.stringify({ refresh_token: refreshToken }),
-    });
-  } catch {
-    // Best-effort -- the local session is cleared regardless (see
-    // useSessionStore.clearSession()), so a network error here shouldn't
-    // block the admin from logging out on their end.
-  }
+  return { user: { id: sub, username: admin_username, role: admin_role }, tokens };
 }

@@ -10,6 +10,7 @@ import {
   Pressable,
   Modal,
   TouchableWithoutFeedback,
+  ViewStyle,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { Card } from '@/src/components/Card';
@@ -20,6 +21,9 @@ import { formatCentavos } from '@/src/services/money';
 import { getPayout, markPayoutPaid, ProofAsset } from '@/src/api/admin';
 import { Payout } from '@/src/types';
 import { ApiError } from '@/src/api/client';
+
+type PressableState = { pressed: boolean; hovered?: boolean };
+const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', {
@@ -141,7 +145,10 @@ export function PayoutDetailPanel({ payoutId, onChanged }: PayoutDetailPanelProp
 
           <View style={styles.divider} />
           <DataRow label="Reserva" value={payout.bookingId} />
-          <Pressable onPress={() => router.push(`/(admin)/users/${payout.ownerId}`)}>
+          <Pressable
+            onPress={() => router.push(`/(admin)/users/${payout.ownerId}`)}
+            style={({ hovered }: PressableState) => [hovered && styles.linkRowHovered, CURSOR_POINTER]}
+          >
             <DataRow label="Dueño" value={payout.ownerId} link />
           </Pressable>
           <DataRow label="Creado" value={formatDate(payout.createdAt)} />
@@ -188,10 +195,16 @@ export function PayoutDetailPanel({ payoutId, onChanged }: PayoutDetailPanelProp
                   deshacer.
                 </Text>
                 <View style={styles.modalActions}>
-                  <Pressable style={styles.modalCancelBtn} onPress={() => setConfirmVisible(false)}>
+                  <Pressable
+                    style={({ hovered }: PressableState) => [styles.modalCancelBtn, hovered && styles.modalCancelBtnHovered, CURSOR_POINTER]}
+                    onPress={() => setConfirmVisible(false)}
+                  >
                     <Text style={styles.modalCancelBtnText}>Cancelar</Text>
                   </Pressable>
-                  <Pressable style={styles.modalConfirmBtn} onPress={confirmMarkPaid}>
+                  <Pressable
+                    style={({ hovered }: PressableState) => [styles.modalConfirmBtn, hovered && styles.modalConfirmBtnHovered, CURSOR_POINTER]}
+                    onPress={confirmMarkPaid}
+                  >
                     <Text style={styles.modalConfirmBtnText}>Confirmar</Text>
                   </Pressable>
                 </View>
@@ -209,7 +222,10 @@ export function PayoutDetailPanel({ payoutId, onChanged }: PayoutDetailPanelProp
                 <Text style={styles.modalTitle}>Pago realizado</Text>
                 <Text style={styles.modalBody}>El pago se marcó como pagado correctamente.</Text>
                 <View style={styles.modalActions}>
-                  <Pressable style={styles.modalConfirmBtn} onPress={() => setSuccessVisible(false)}>
+                  <Pressable
+                    style={({ hovered }: PressableState) => [styles.modalConfirmBtn, hovered && styles.modalConfirmBtnHovered, CURSOR_POINTER]}
+                    onPress={() => setSuccessVisible(false)}
+                  >
                     <Text style={styles.modalConfirmBtnText}>Listo</Text>
                   </Pressable>
                 </View>
@@ -245,6 +261,7 @@ const styles = StyleSheet.create({
   dataValue: { fontSize: 13, color: colors.text, fontWeight: '600', flexShrink: 1, textAlign: 'right' },
   dataValueEmphasize: { fontSize: 16, fontWeight: '700' },
   dataValueLink: { color: colors.teal, textDecorationLine: 'underline' },
+  linkRowHovered: { backgroundColor: colors.background, borderRadius: 6 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 8 },
   hint: { fontSize: 13, color: colors.textSecondary, marginBottom: 10 },
   proofImage: { width: '100%', height: 220, borderRadius: 10, marginBottom: 10, backgroundColor: colors.background },
@@ -255,7 +272,9 @@ const styles = StyleSheet.create({
   modalBody: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 14, justifyContent: 'flex-end' },
   modalCancelBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8 },
+  modalCancelBtnHovered: { backgroundColor: colors.background },
   modalCancelBtnText: { color: colors.textSecondary, fontWeight: '600' },
   modalConfirmBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: colors.teal },
+  modalConfirmBtnHovered: { backgroundColor: '#137274' },
   modalConfirmBtnText: { color: colors.white, fontWeight: '700' },
 });

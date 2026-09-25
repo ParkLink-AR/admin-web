@@ -2,6 +2,8 @@ import { Platform } from 'react-native';
 import { request, requestMultipart } from './client';
 import {
   AccountType,
+  AdminAccount,
+  AdminAccountRole,
   AdminUserDetail,
   AdminUserSummary,
   BookingKind,
@@ -298,4 +300,56 @@ export async function updateCommissionSettings(commissionRateBp: number): Promis
     { method: 'PUT', body: JSON.stringify({ commission_rate_bp: commissionRateBp }) }
   );
   return { commissionRateBp: response.commission_rate_bp, commissionRatePercent: response.commission_rate_percent };
+}
+
+// -------------------------
+// Admin accounts (auth-service, SUPERADMIN-only, via gateway) -- the admin
+// identity system itself, separate from the regular `users` table above.
+// -------------------------
+
+interface AdminAccountResponse {
+  id: string;
+  username: string;
+  role: AdminAccountRole;
+  is_active: boolean;
+  created_at: string;
+  last_login_at: string | null;
+}
+
+function toAdminAccount(a: AdminAccountResponse): AdminAccount {
+  return {
+    id: a.id,
+    username: a.username,
+    role: a.role,
+    isActive: a.is_active,
+    createdAt: a.created_at,
+    lastLoginAt: a.last_login_at,
+  };
+}
+
+export async function listAdminAccounts(): Promise<AdminAccount[]> {
+  const response = await request<AdminAccountResponse[]>('/admin/accounts');
+  return response.map(toAdminAccount);
+}
+
+export interface CreateAdminAccountInput {
+  username: string;
+  password: string;
+  role: AdminAccountRole;
+}
+
+export async function createAdminAccount(input: CreateAdminAccountInput): Promise<AdminAccount> {
+  const response = await request<AdminAccountResponse>('/admin/accounts', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return toAdminAccount(response);
+}
+
+export async function setAdminAccountActive(id: string, isActive: boolean): Promise<AdminAccount> {
+  const response = await request<AdminAccountResponse>(`/admin/accounts/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ is_active: isActive }),
+  });
+  return toAdminAccount(response);
 }

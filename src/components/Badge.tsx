@@ -2,6 +2,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { colors } from '@/src/theme/colors';
 import {
   AccountType,
+  AdminAccountRole,
   BookingStatus,
   ParkingSpotStatus,
   PayoutStatus,
@@ -88,6 +89,24 @@ const PAYOUT_STATUS_COLOR: Record<PayoutStatus, string> = {
 };
 export function PayoutStatusBadge({ status }: { status: PayoutStatus }) {
   return <Badge label={PAYOUT_STATUS_LABEL[status]} color={PAYOUT_STATUS_COLOR[status]} />;
+}
+
+const ADMIN_ROLE_LABEL: Record<AdminAccountRole, string> = {
+  SUPERADMIN: 'SUPERADMIN',
+  ADMIN: 'ADMIN',
+};
+const ADMIN_ROLE_COLOR: Record<AdminAccountRole, string> = {
+  SUPERADMIN: colors.deepNavy,
+  ADMIN: colors.teal,
+};
+export function AdminRoleBadge({ role }: { role: AdminAccountRole }) {
+  return <Badge label={ADMIN_ROLE_LABEL[role]} color={ADMIN_ROLE_COLOR[role]} />;
+}
+
+export function AdminActiveBadge({ isActive }: { isActive: boolean }) {
+  return (
+    <Badge label={isActive ? 'ACTIVO' : 'INACTIVO'} color={isActive ? colors.success : colors.textSecondary} />
+  );
 }
 
 const styles = StyleSheet.create({

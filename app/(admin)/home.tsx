@@ -1,4 +1,4 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet, ViewStyle } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/src/components/Screen';
@@ -7,6 +7,8 @@ import { PageHeader } from '@/src/components/PageHeader';
 import { colors } from '@/src/theme/colors';
 import { useSessionStore } from '@/src/store/useSessionStore';
 
+type PressableState = { pressed: boolean; hovered?: boolean };
+
 function Tile({ title, subtitle, icon, onPress }: {
   title: string;
   subtitle: string;
@@ -14,7 +16,14 @@ function Tile({ title, subtitle, icon, onPress }: {
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.tileWrap}>
+    <Pressable
+      onPress={onPress}
+      style={({ hovered }: PressableState) => [
+        styles.tileWrap,
+        { cursor: 'pointer' } as unknown as ViewStyle,
+        hovered && styles.tileWrapHovered,
+      ]}
+    >
       <Card style={styles.tile}>
         <View style={styles.tileIcon}>
           <Ionicons name={icon} size={22} color={colors.teal} />
@@ -32,7 +41,7 @@ export default function Home() {
   return (
     <Screen style={styles.screen}>
       <View style={styles.body}>
-        <PageHeader title="Inicio" subtitle={`Sesión iniciada como ${user?.email}`} />
+        <PageHeader title="Inicio" subtitle={`Sesión iniciada como ${user?.username}`} />
 
         {/* flexWrap reflows these into columns on a wide window and a single
             column on a narrow one, without needing a hard breakpoint. */}
@@ -65,7 +74,8 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
   body: { padding: 24, maxWidth: 1100, width: '100%', alignSelf: 'center' },
   tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
-  tileWrap: { flexGrow: 1, flexBasis: 260, minWidth: 220, maxWidth: 360 },
+  tileWrap: { flexGrow: 1, flexBasis: 260, minWidth: 220, maxWidth: 360, borderRadius: 14 },
+  tileWrapHovered: { transform: [{ translateY: -2 }], shadowColor: colors.deepNavy, shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
   tile: { gap: 6 },
   tileIcon: {
     width: 40,

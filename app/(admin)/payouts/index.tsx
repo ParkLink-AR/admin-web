@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator } from 'react-native';
+import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, ViewStyle } from 'react-native';
 import { router, useFocusEffect } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { PageHeader } from '@/src/components/PageHeader';
@@ -11,6 +11,9 @@ import { listPayouts } from '@/src/api/admin';
 import { Payout, PayoutStatus } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
+
+type PressableState = { pressed: boolean; hovered?: boolean };
+const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -74,12 +77,25 @@ export default function Payouts() {
     <View style={isDesktop ? styles.listPaneDesktop : styles.listPaneFull}>
       <View style={styles.tabBar}>
         <Pressable
-          style={[styles.tab, status === 'PENDING' && styles.tabActive]}
+          style={({ hovered }: PressableState) => [
+            styles.tab,
+            status === 'PENDING' && styles.tabActive,
+            hovered && status !== 'PENDING' && styles.tabHovered,
+            CURSOR_POINTER,
+          ]}
           onPress={() => switchStatus('PENDING')}
         >
           <Text style={[styles.tabText, status === 'PENDING' && styles.tabTextActive]}>Pendientes</Text>
         </Pressable>
-        <Pressable style={[styles.tab, status === 'PAID' && styles.tabActive]} onPress={() => switchStatus('PAID')}>
+        <Pressable
+          style={({ hovered }: PressableState) => [
+            styles.tab,
+            status === 'PAID' && styles.tabActive,
+            hovered && status !== 'PAID' && styles.tabHovered,
+            CURSOR_POINTER,
+          ]}
+          onPress={() => switchStatus('PAID')}
+        >
           <Text style={[styles.tabText, status === 'PAID' && styles.tabTextActive]}>Pagados</Text>
         </Pressable>
       </View>
@@ -99,7 +115,12 @@ export default function Payouts() {
         renderItem={({ item }) => (
           <Pressable
             onPress={() => selectPayout(item.id)}
-            style={[styles.row, isDesktop && item.id === selectedId && styles.rowSelected]}
+            style={({ hovered }: PressableState) => [
+              styles.row,
+              isDesktop && item.id === selectedId && styles.rowSelected,
+              hovered && item.id !== selectedId && styles.rowHovered,
+              CURSOR_POINTER,
+            ]}
           >
             <View style={{ flex: 1 }}>
               <Text style={styles.amount}>{formatCentavos(item.netAmount)}</Text>
@@ -179,6 +200,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabActive: { backgroundColor: colors.deepNavy, borderColor: colors.deepNavy },
+  tabHovered: { backgroundColor: colors.background },
   tabText: { fontSize: 13, fontWeight: '600', color: colors.textSecondary },
   tabTextActive: { color: colors.white },
   spinner: { marginTop: 12 },
@@ -197,6 +219,7 @@ const styles = StyleSheet.create({
     padding: 14,
   },
   rowSelected: { borderColor: colors.teal, borderWidth: 2 },
+  rowHovered: { backgroundColor: colors.background },
   amount: { fontSize: 17, fontWeight: '700', color: colors.text },
   caption: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
 });

@@ -116,3 +116,17 @@ export interface CommissionSettings {
   commissionRateBp: number;
   commissionRatePercent: number;
 }
+
+// Admin accounts are a separate identity system (their own table in
+// auth-service, unrelated to `AdminUserSummary`/the `users` table) --
+// username-based, no email, gated by SUPERADMIN vs ADMIN role.
+export type AdminAccountRole = 'SUPERADMIN' | 'ADMIN';
+
+export interface AdminAccount {
+  id: string;
+  username: string;
+  role: AdminAccountRole;
+  isActive: boolean;
+  createdAt: string;
+  lastLoginAt: string | null;
+}

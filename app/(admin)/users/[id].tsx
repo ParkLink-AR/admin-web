@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/src/components/Screen';
 import { Card } from '@/src/components/Card';
@@ -19,6 +19,8 @@ import { ApiError } from '@/src/api/client';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
 
 type Tab = 'spots' | 'made' | 'received';
+type PressableState = { pressed: boolean; hovered?: boolean };
+const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
 
 function formatDate(iso: string) {
   return new Date(iso).toLocaleDateString('es-AR', {
@@ -217,7 +219,15 @@ function DataRow({ label, value }: { label: string; value: string }) {
 
 function TabButton({ label, active, onPress }: { label: string; active: boolean; onPress: () => void }) {
   return (
-    <Pressable onPress={onPress} style={[styles.tabButton, active && styles.tabButtonActive]}>
+    <Pressable
+      onPress={onPress}
+      style={({ hovered }: PressableState) => [
+        styles.tabButton,
+        active && styles.tabButtonActive,
+        hovered && !active && styles.tabButtonHovered,
+        CURSOR_POINTER,
+      ]}
+    >
       <Text style={[styles.tabButtonText, active && styles.tabButtonTextActive]}>{label}</Text>
     </Pressable>
   );
@@ -274,6 +284,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabButtonActive: { backgroundColor: colors.deepNavy, borderColor: colors.deepNavy },
+  tabButtonHovered: { backgroundColor: colors.background },
   tabButtonText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
   tabButtonTextActive: { color: colors.white },
   rowCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },

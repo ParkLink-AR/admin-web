@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ActivityIndicator, Modal, Pressable, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, TextInput, StyleSheet, ActivityIndicator, Modal, Pressable, TouchableWithoutFeedback, ViewStyle } from 'react-native';
 import { Screen } from '@/src/components/Screen';
 import { Card } from '@/src/components/Card';
 import { PageHeader } from '@/src/components/PageHeader';
@@ -7,6 +7,8 @@ import { Button } from '@/src/components/Button';
 import { colors } from '@/src/theme/colors';
 import { getCommissionSettings, updateCommissionSettings } from '@/src/api/admin';
 import { ApiError } from '@/src/api/client';
+
+type PressableState = { pressed: boolean; hovered?: boolean };
 
 export default function Settings() {
   const [loading, setLoading] = useState(true);
@@ -118,7 +120,14 @@ export default function Settings() {
                 <Text style={styles.modalTitle}>Comisión actualizada</Text>
                 <Text style={styles.modalBody}>El nuevo porcentaje de comisión se guardó correctamente.</Text>
                 <View style={styles.modalActions}>
-                  <Pressable style={styles.modalConfirmBtn} onPress={() => setSuccessVisible(false)}>
+                  <Pressable
+                    style={({ hovered }: PressableState) => [
+                      styles.modalConfirmBtn,
+                      hovered && styles.modalConfirmBtnHovered,
+                      { cursor: 'pointer' } as unknown as ViewStyle,
+                    ]}
+                    onPress={() => setSuccessVisible(false)}
+                  >
                     <Text style={styles.modalConfirmBtnText}>Listo</Text>
                   </Pressable>
                 </View>
@@ -157,5 +166,6 @@ const styles = StyleSheet.create({
   modalBody: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
   modalActions: { flexDirection: 'row', gap: 10, marginTop: 14, justifyContent: 'flex-end' },
   modalConfirmBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, backgroundColor: colors.teal },
+  modalConfirmBtnHovered: { backgroundColor: '#137274' },
   modalConfirmBtnText: { color: colors.white, fontWeight: '700' },
 });

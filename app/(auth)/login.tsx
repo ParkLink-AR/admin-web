@@ -9,7 +9,7 @@ import { login, NotAdminError } from '@/src/api/auth';
 import { ApiError } from '@/src/api/client';
 
 export default function Login() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -17,15 +17,15 @@ export default function Login() {
 
   async function handleLogin() {
     setError(null);
-    const normalizedEmail = email.trim().toLowerCase();
-    if (!normalizedEmail || !password) {
-      setError('Ingresá tu email y contraseña.');
+    const normalizedUsername = username.trim();
+    if (!normalizedUsername || !password) {
+      setError('Ingresá tu usuario y contraseña.');
       return;
     }
 
     setLoading(true);
     try {
-      const { user, tokens } = await login({ email: normalizedEmail, password });
+      const { user, tokens } = await login({ username: normalizedUsername, password });
       setSession(user, tokens);
       router.replace('/(admin)/home');
     } catch (err) {
@@ -49,12 +49,12 @@ export default function Login() {
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <TextInput
           style={styles.input}
-          placeholder="Email"
+          placeholder="Usuario"
           placeholderTextColor={colors.textSecondary}
           autoCapitalize="none"
-          keyboardType="email-address"
-          value={email}
-          onChangeText={setEmail}
+          autoCorrect={false}
+          value={username}
+          onChangeText={setUsername}
         />
         <TextInput
           style={styles.input}
@@ -76,7 +76,7 @@ export default function Login() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
-  inner: { flex: 1, padding: 24, gap: 12, justifyContent: 'center' },
+  inner: { flex: 1, padding: 24, gap: 12, justifyContent: 'center', maxWidth: 360, width: '100%', alignSelf: 'center' },
   title: { fontSize: 26, fontWeight: '700', color: colors.text, textAlign: 'center' },
   subtitle: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginBottom: 12 },
   input: {
