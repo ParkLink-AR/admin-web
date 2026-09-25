@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { useLocalSearchParams } from 'expo-router';
-import { View, Text, StyleSheet, ScrollView, ActivityIndicator, Pressable, ViewStyle } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { View, Text, Image, StyleSheet, ScrollView, ActivityIndicator, Pressable, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/src/components/Screen';
 import { Card } from '@/src/components/Card';
@@ -35,6 +35,17 @@ function formatDate(iso: string) {
 function displayName(u: { firstName: string | null; lastName: string | null; email: string }) {
   const name = [u.firstName, u.lastName].filter(Boolean).join(' ');
   return name || u.email;
+}
+
+function initials(u: { firstName: string | null; lastName: string | null; email: string }) {
+  const name = [u.firstName, u.lastName].filter(Boolean).join(' ');
+  if (!name) return u.email.slice(0, 1).toUpperCase();
+  return name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]!.toUpperCase())
+    .join('');
 }
 
 export default function UserDetail() {
@@ -106,9 +117,21 @@ export default function UserDetail() {
             stacked on a narrow window/phone. */}
         <View style={[styles.topRow, isDesktop && styles.topRowDesktop]}>
           <Card style={isDesktop ? styles.topRowCol : styles.topRowColStacked}>
-            <Text style={styles.name}>{displayName(user)}</Text>
-            <Text style={styles.detailLine}>{user.email}</Text>
-            {user.phone ? <Text style={styles.detailLine}>{user.phone}</Text> : null}
+            <View style={styles.identityRow}>
+              {user.avatarUrl ? (
+                <Image source={{ uri: user.avatarUrl }} style={styles.avatar} />
+              ) : (
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarFallbackText}>{initials(user)}</Text>
+                </View>
+              )}
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{displayName(user)}</Text>
+                <Text style={styles.detailLine}>{user.email}</Text>
+                {user.phone ? <Text style={styles.detailLine}>{user.phone}</Text> : null}
+                {user.dni ? <Text style={styles.detailLine}>DNI: {user.dni}</Text> : null}
+              </View>
+            </View>
             <View style={styles.badgeRow}>
               <AccountTypeBadge accountType={user.accountType} />
               <UserStatusBadge status={user.status} />
@@ -152,14 +175,21 @@ export default function UserDetail() {
             <Text style={styles.hint}>No tiene cocheras publicadas.</Text>
           ) : (
             spots.map((s) => (
-              <Card key={s.id} style={styles.rowCard}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.rowTitle}>{s.title}</Text>
-                  <Text style={styles.caption}>{s.address}</Text>
-                  <Text style={styles.caption}>{spotPriceLine(s)}</Text>
-                </View>
-                <SpotStatusBadge status={s.status} />
-              </Card>
+              <Pressable
+                key={s.id}
+                onPress={() => router.push(`/(admin)/spots/${s.id}`)}
+                style={({ hovered }: PressableState) => [hovered && styles.rowHovered, CURSOR_POINTER]}
+              >
+                <Card style={styles.rowCard}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.rowTitle}>{s.title}</Text>
+                    <Text style={styles.caption}>{s.address}</Text>
+                    <Text style={styles.caption}>{spotPriceLine(s)}</Text>
+                  </View>
+                  <SpotStatusBadge status={s.status} />
+                  <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+                </Card>
+              </Pressable>
             ))
           )
         ) : null}
@@ -234,21 +264,47 @@ function TabButton({ label, active, onPress }: { label: string; active: boolean;
 }
 
 function BookingRow({ booking }: { booking: DriverBooking | OwnerReceivedBooking }) {
+  function openDetail() {
+    router.push({
+      pathname: '/(admin)/bookings/[id]',
+      params: {
+        id: booking.id,
+        parkingSpotId: booking.parkingSpotId,
+        userId: booking.userId,
+        start: booking.start,
+        end: booking.end,
+        status: booking.status,
+        amount: String(booking.amount),
+        paymentId: booking.paymentId ?? '',
+        paidAt: booking.paidAt ?? '',
+        cancellationReason: booking.cancellationReason ?? '',
+        kind: booking.kind,
+        updatedAt: booking.updatedAt,
+      },
+    });
+  }
+
   return (
-    <Card style={styles.rowCard}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.rowTitle}>
-          {formatDate(booking.start)} → {formatDate(booking.end)}
-        </Text>
-        <Text style={styles.caption}>
-          {booking.kind === 'HOURLY' ? 'Por hora' : 'Estadía'} · {formatCentavos(booking.amount)}
-        </Text>
-        {booking.cancellationReason ? (
-          <Text style={styles.caption}>Motivo: {booking.cancellationReason}</Text>
-        ) : null}
-      </View>
-      <BookingStatusBadge status={booking.status} />
-    </Card>
+    <Pressable
+      onPress={openDetail}
+      style={({ hovered }: PressableState) => [hovered && styles.rowHovered, CURSOR_POINTER]}
+    >
+      <Card style={styles.rowCard}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.rowTitle}>
+            {formatDate(booking.start)} → {formatDate(booking.end)}
+          </Text>
+          <Text style={styles.caption}>
+            {booking.kind === 'HOURLY' ? 'Por hora' : 'Estadía'} · {formatCentavos(booking.amount)}
+          </Text>
+          {booking.cancellationReason ? (
+            <Text style={styles.caption}>Motivo: {booking.cancellationReason}</Text>
+          ) : null}
+        </View>
+        <BookingStatusBadge status={booking.status} />
+        <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+      </Card>
+    </Pressable>
   );
 }
 
@@ -261,6 +317,13 @@ const styles = StyleSheet.create({
   topRowDesktop: { flexDirection: 'row', alignItems: 'stretch' },
   topRowCol: { flex: 1 },
   topRowColStacked: {},
+  identityRow: { flexDirection: 'row', alignItems: 'center', gap: 14, marginBottom: 4 },
+  avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: colors.background },
+  avatarFallback: {
+    width: 56, height: 56, borderRadius: 28, backgroundColor: colors.deepNavy,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  avatarFallbackText: { color: colors.white, fontSize: 18, fontWeight: '700' },
   name: { fontSize: 20, fontWeight: '700', color: colors.text },
   detailLine: { fontSize: 14, color: colors.textSecondary, marginTop: 2 },
   badgeRow: { flexDirection: 'row', gap: 8, marginTop: 10 },
@@ -288,5 +351,6 @@ const styles = StyleSheet.create({
   tabButtonText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
   tabButtonTextActive: { color: colors.white },
   rowCard: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10 },
+  rowHovered: { opacity: 0.85 },
   rowTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
 });

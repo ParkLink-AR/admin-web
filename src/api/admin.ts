@@ -34,6 +34,8 @@ interface AdminUserSummaryResponse {
 }
 
 interface AdminUserDetailResponse extends AdminUserSummaryResponse {
+  dni: string | null;
+  avatar_url: string | null;
   cbu: string | null;
   payout_titular: string | null;
   cuil: string | null;
@@ -59,6 +61,8 @@ function toAdminUserSummary(u: AdminUserSummaryResponse): AdminUserSummary {
 function toAdminUserDetail(u: AdminUserDetailResponse): AdminUserDetail {
   return {
     ...toAdminUserSummary(u),
+    dni: u.dni,
+    avatarUrl: u.avatar_url,
     cbu: u.cbu,
     payoutTitular: u.payout_titular,
     cuil: u.cuil,
@@ -119,6 +123,13 @@ interface ParkingSpotResponse {
 // even for an admin. See the report for this deviation.
 export async function getUserParkingSpots(userId: string): Promise<ParkingSpot[]> {
   return request<ParkingSpotResponse[]>(`/users/${userId}/parking-spots`);
+}
+
+// Single-spot lookup for the admin spot-detail screen -- parking-service's GET
+// /parking-spots/{id} is PUBLIC (same one the driver app uses), so this needs no admin
+// gate, just a valid bearer token like every other request this app makes.
+export async function getParkingSpotById(spotId: string): Promise<ParkingSpot> {
+  return request<ParkingSpotResponse>(`/parking-spots/${spotId}`);
 }
 
 interface DriverBookingResponse {

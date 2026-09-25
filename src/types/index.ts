@@ -13,6 +13,8 @@ export interface AdminUserSummary {
 }
 
 export interface AdminUserDetail extends AdminUserSummary {
+  dni: string | null;
+  avatarUrl: string | null;
   cbu: string | null;
   payoutTitular: string | null;
   cuil: string | null;
