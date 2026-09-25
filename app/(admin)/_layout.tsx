@@ -50,7 +50,7 @@ export default function AdminLayout() {
         <View style={styles.sidebar}>
           <View>
             <Image source={require('@/assets/logo-letras-darkmode.png')} style={styles.brandLogo} resizeMode="contain" />
-            <Text style={styles.brandUsername} numberOfLines={1}>{user.username}</Text>
+            <Text style={styles.brandUsername} numberOfLines={1}>Usuario: {user.username}</Text>
           </View>
           <View style={styles.sidebarNav}>
             {navItems.map((item) => {
