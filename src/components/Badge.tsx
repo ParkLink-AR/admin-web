@@ -1,0 +1,105 @@
+import { View, Text, StyleSheet } from 'react-native';
+import { colors } from '@/src/theme/colors';
+import {
+  AccountType,
+  BookingStatus,
+  ParkingSpotStatus,
+  PayoutStatus,
+  UserStatus,
+} from '@/src/types';
+
+// Generic colored pill -- this app has several independent status enums
+// (user, booking, payout, spot), unlike mobile's single BookingStatus-typed
+// StatusBadge, so this takes a plain label/color instead of one type union.
+export function Badge({ label, color }: { label: string; color: string }) {
+  return (
+    <View style={[styles.badge, { backgroundColor: color }]}>
+      <Text style={styles.text}>{label}</Text>
+    </View>
+  );
+}
+
+const USER_STATUS_LABEL: Record<UserStatus, string> = {
+  ACTIVE: 'ACTIVO',
+  SUSPENDED: 'SUSPENDIDO',
+  DELETED: 'ELIMINADO',
+};
+const USER_STATUS_COLOR: Record<UserStatus, string> = {
+  ACTIVE: colors.success,
+  SUSPENDED: colors.warning,
+  DELETED: colors.danger,
+};
+export function UserStatusBadge({ status }: { status: UserStatus }) {
+  return <Badge label={USER_STATUS_LABEL[status]} color={USER_STATUS_COLOR[status]} />;
+}
+
+const ACCOUNT_TYPE_LABEL: Record<AccountType, string> = {
+  DRIVER: 'CONDUCTOR',
+  OWNER: 'DUEÑO',
+  BOTH: 'CONDUCTOR + DUEÑO',
+};
+export function AccountTypeBadge({ accountType }: { accountType: AccountType }) {
+  return <Badge label={ACCOUNT_TYPE_LABEL[accountType]} color={colors.deepNavy} />;
+}
+
+const BOOKING_STATUS_LABEL: Record<BookingStatus, string> = {
+  PENDING_PAYMENT: 'PENDIENTE DE PAGO',
+  CONFIRMED: 'CONFIRMADA',
+  COMPLETED: 'FINALIZADA',
+  CANCELLED: 'CANCELADA',
+  EXPIRED: 'EXPIRADA',
+  PENDING_OWNER_APPROVAL: 'A CONFIRMAR',
+  IN_PROGRESS: 'EN CURSO',
+};
+const BOOKING_STATUS_COLOR: Record<BookingStatus, string> = {
+  PENDING_PAYMENT: colors.warning,
+  CONFIRMED: colors.success,
+  COMPLETED: colors.deepNavy,
+  CANCELLED: colors.textSecondary,
+  EXPIRED: colors.textSecondary,
+  PENDING_OWNER_APPROVAL: colors.warning,
+  IN_PROGRESS: colors.teal,
+};
+export function BookingStatusBadge({ status }: { status: BookingStatus }) {
+  return <Badge label={BOOKING_STATUS_LABEL[status]} color={BOOKING_STATUS_COLOR[status]} />;
+}
+
+const SPOT_STATUS_LABEL: Record<ParkingSpotStatus, string> = {
+  active: 'ACTIVA',
+  paused: 'PAUSADA',
+  deleted: 'ELIMINADA',
+};
+const SPOT_STATUS_COLOR: Record<ParkingSpotStatus, string> = {
+  active: colors.success,
+  paused: colors.warning,
+  deleted: colors.danger,
+};
+export function SpotStatusBadge({ status }: { status: ParkingSpotStatus }) {
+  return <Badge label={SPOT_STATUS_LABEL[status]} color={SPOT_STATUS_COLOR[status]} />;
+}
+
+const PAYOUT_STATUS_LABEL: Record<PayoutStatus, string> = {
+  PENDING: 'PENDIENTE',
+  PAID: 'PAGADO',
+};
+const PAYOUT_STATUS_COLOR: Record<PayoutStatus, string> = {
+  PENDING: colors.warning,
+  PAID: colors.success,
+};
+export function PayoutStatusBadge({ status }: { status: PayoutStatus }) {
+  return <Badge label={PAYOUT_STATUS_LABEL[status]} color={PAYOUT_STATUS_COLOR[status]} />;
+}
+
+const styles = StyleSheet.create({
+  badge: {
+    borderRadius: 6,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    alignSelf: 'flex-start',
+  },
+  text: {
+    color: colors.white,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+});

@@ -1,0 +1,33 @@
+{
+  "expo": {
+    "name": "parklink-admin",
+    "slug": "parklink-admin",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "parklink-admin",
+    "web": {
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ParkLink Admin usa tu galería para adjuntar el comprobante de una transferencia."
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.parklink.admin"
+    },
+    "android": {
+      "package": "com.parklink.admin"
+    },
+    "extra": {
+      "router": {}
+    }
+  }
+}
