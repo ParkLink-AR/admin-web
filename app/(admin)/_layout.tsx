@@ -1,5 +1,5 @@
 import { Redirect, Slot, router, usePathname } from 'expo-router';
-import { View, Text, Pressable, StyleSheet, ScrollView, ViewStyle } from 'react-native';
+import { View, Text, Image, Pressable, StyleSheet, ScrollView, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/src/store/useSessionStore';
 import { colors } from '@/src/theme/colors';
@@ -49,7 +49,7 @@ export default function AdminLayout() {
       <View style={styles.desktopRoot}>
         <View style={styles.sidebar}>
           <View>
-            <Text style={styles.brand}>ParkLink Admin</Text>
+            <Image source={require('@/assets/logo-letras.png')} style={styles.brandLogo} resizeMode="contain" />
             <Text style={styles.brandUsername} numberOfLines={1}>{user.username}</Text>
           </View>
           <View style={styles.sidebarNav}>
@@ -94,7 +94,7 @@ export default function AdminLayout() {
   return (
     <View style={styles.mobileRoot}>
       <View style={styles.mobileTopBar}>
-        <Text style={styles.brand}>ParkLink Admin</Text>
+        <Image source={require('@/assets/logo-letras.png')} style={styles.mobileBrandLogo} resizeMode="contain" />
         <Pressable onPress={handleLogout} hitSlop={8}>
           <Ionicons name="log-out-outline" size={22} color={colors.danger} />
         </Pressable>
@@ -136,8 +136,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     justifyContent: 'space-between',
   },
-  brand: { color: colors.white, fontSize: 17, fontWeight: '700' },
-  brandUsername: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 4 },
+  brandLogo: { width: 152, height: 29 },
+  brandUsername: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 8 },
+  mobileBrandLogo: { width: 132, height: 25 },
   sidebarNav: { gap: 4, marginTop: 32 },
   sidebarItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 8 },
   sidebarItemActive: { backgroundColor: 'rgba(255,255,255,0.12)' },

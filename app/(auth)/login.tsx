@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Text, TextInput, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
+import { Text, TextInput, Image, View, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform } from 'react-native';
 import { router } from 'expo-router';
 import { Button } from '@/src/components/Button';
 import { Screen } from '@/src/components/Screen';
@@ -44,7 +44,10 @@ export default function Login() {
   return (
     <Screen style={styles.screen}>
       <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={styles.inner}>
-        <Text style={styles.title}>ParkLink Admin</Text>
+        <View style={styles.brandRow}>
+          <Image source={require('@/assets/logo-letras.png')} style={styles.logo} resizeMode="contain" />
+          <Text style={styles.brandTag}>Admin</Text>
+        </View>
         <Text style={styles.subtitle}>Herramienta interna de soporte y pagos</Text>
         {error ? <Text style={styles.error}>{error}</Text> : null}
         <TextInput
@@ -77,7 +80,12 @@ export default function Login() {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.surface },
   inner: { flex: 1, padding: 24, gap: 12, justifyContent: 'center', maxWidth: 360, width: '100%', alignSelf: 'center' },
-  title: { fontSize: 26, fontWeight: '700', color: colors.text, textAlign: 'center' },
+  brandRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
+  logo: { width: 176, height: 33 },
+  brandTag: {
+    fontSize: 12, fontWeight: '700', color: colors.teal, textTransform: 'uppercase',
+    borderWidth: 1, borderColor: colors.teal, borderRadius: 6, paddingHorizontal: 6, paddingVertical: 2,
+  },
   subtitle: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', marginBottom: 12 },
   input: {
     borderWidth: 1,
