@@ -117,12 +117,11 @@ interface ParkingSpotResponse {
   reviewCount: number;
 }
 
-// parking-service is NestJS -- already camelCase, no mapping needed. Note:
-// this endpoint (parking-spots.service.ts's findAllByOwner) excludes DELETED
-// spots but includes ACTIVE and PAUSED, so a deleted spot won't show up here
-// even for an admin. See the report for this deviation.
+// parking-service is NestJS -- already camelCase, no mapping needed.
+// includeDeleted=true is admin-only -- the owner's own app never passes it, so a spot the
+// owner deleted keeps showing up here (marked ELIMINADA via SpotStatusBadge) for support.
 export async function getUserParkingSpots(userId: string): Promise<ParkingSpot[]> {
-  return request<ParkingSpotResponse[]>(`/users/${userId}/parking-spots`);
+  return request<ParkingSpotResponse[]>(`/users/${userId}/parking-spots?includeDeleted=true`);
 }
 
 // Single-spot lookup for the admin spot-detail screen -- parking-service's GET
