@@ -353,3 +353,14 @@ export async function setAdminAccountActive(id: string, isActive: boolean): Prom
   });
   return toAdminAccount(response);
 }
+
+// SUPERADMIN-only, same as the rest of /admin/accounts/* -- there's no self-service
+// "forgot password" for this separate staff identity system, so a superadmin sets a new
+// password for a locked-out admin instead.
+export async function setAdminAccountPassword(id: string, newPassword: string): Promise<AdminAccount> {
+  const response = await request<AdminAccountResponse>(`/admin/accounts/${id}/password`, {
+    method: 'POST',
+    body: JSON.stringify({ new_password: newPassword }),
+  });
+  return toAdminAccount(response);
+}

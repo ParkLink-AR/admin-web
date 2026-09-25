@@ -16,7 +16,7 @@ import { PageHeader } from '@/src/components/PageHeader';
 import { Button } from '@/src/components/Button';
 import { AdminRoleBadge, AdminActiveBadge } from '@/src/components/Badge';
 import { colors } from '@/src/theme/colors';
-import { listAdminAccounts, createAdminAccount, setAdminAccountActive } from '@/src/api/admin';
+import { listAdminAccounts, createAdminAccount, setAdminAccountActive, setAdminAccountPassword } from '@/src/api/admin';
 import { AdminAccount, AdminAccountRole } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
@@ -62,6 +62,11 @@ export default function AdminAccounts() {
   const [toggleTarget, setToggleTarget] = useState<AdminAccount | null>(null);
   const [toggleSubmitting, setToggleSubmitting] = useState(false);
   const [toggleError, setToggleError] = useState<string | null>(null);
+
+  const [passwordTarget, setPasswordTarget] = useState<AdminAccount | null>(null);
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [passwordSubmitting, setPasswordSubmitting] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -135,6 +140,45 @@ export default function AdminAccounts() {
     }
   }
 
+  function askChangePassword(account: AdminAccount) {
+    setPasswordError(null);
+    setNewAdminPassword('');
+    setPasswordTarget(account);
+  }
+
+  async function confirmChangePassword() {
+    if (!passwordTarget) return;
+    if (!newAdminPassword) {
+      setPasswordError('Ingresá una contraseña nueva.');
+      return;
+    }
+    setPasswordSubmitting(true);
+    setPasswordError(null);
+    try {
+      await setAdminAccountPassword(passwordTarget.id, newAdminPassword);
+      setPasswordTarget(null);
+    } catch (err) {
+      setPasswordError(err instanceof ApiError ? err.detail : 'No se pudo cambiar la contraseña.');
+    } finally {
+      setPasswordSubmitting(false);
+    }
+  }
+
+  function ChangePasswordButton({ account }: { account: AdminAccount }) {
+    return (
+      <Pressable
+        onPress={() => askChangePassword(account)}
+        style={({ hovered }: PressableState) => [
+          styles.passwordBtn,
+          hovered && styles.passwordBtnHovered,
+          CURSOR_POINTER,
+        ]}
+      >
+        <Text style={styles.passwordBtnText}>Cambiar contraseña</Text>
+      </Pressable>
+    );
+  }
+
   function ToggleButton({ account }: { account: AdminAccount }) {
     const isSelf = account.id === sessionUser?.id;
     if (isSelf) {
@@ -183,7 +227,7 @@ export default function AdminAccounts() {
               <Text style={[styles.th, styles.colStatus]}>Estado</Text>
               <Text style={[styles.th, styles.colDate]}>Creado</Text>
               <Text style={[styles.th, styles.colDate]}>Último ingreso</Text>
-              <Text style={[styles.th, styles.colAction]}>Acción</Text>
+              <Text style={[styles.th, styles.colAction]}>Acciones</Text>
             </View>
             <FlatList
               data={accounts}
@@ -201,7 +245,8 @@ export default function AdminAccounts() {
                   <Text style={[styles.tdSecondary, styles.colDate]}>
                     {item.lastLoginAt ? formatDateTime(item.lastLoginAt) : 'Nunca'}
                   </Text>
-                  <View style={styles.colAction}>
+                  <View style={[styles.colAction, styles.actionGroup]}>
+                    <ChangePasswordButton account={item} />
                     <ToggleButton account={item} />
                   </View>
                 </View>
@@ -226,7 +271,8 @@ export default function AdminAccounts() {
                 <Text style={styles.caption}>
                   Último ingreso: {item.lastLoginAt ? formatDateTime(item.lastLoginAt) : 'Nunca'}
                 </Text>
-                <View style={styles.cardAction}>
+                <View style={[styles.cardAction, styles.actionGroup]}>
+                  <ChangePasswordButton account={item} />
                   <ToggleButton account={item} />
                 </View>
               </View>
@@ -344,6 +390,45 @@ export default function AdminAccounts() {
           </View>
         </TouchableWithoutFeedback>
       </Modal>
+
+      {/* Change password -- SUPERADMIN-only, same dialog pattern as the rest of this
+          screen. There's no self-service reset for this separate staff identity system,
+          so a locked-out admin gets a new password set here instead. */}
+      <Modal visible={!!passwordTarget} transparent animationType="fade" onRequestClose={() => setPasswordTarget(null)}>
+        <TouchableWithoutFeedback onPress={() => setPasswordTarget(null)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalSheet}>
+                <Text style={styles.modalTitle}>Cambiar contraseña</Text>
+                <Text style={styles.modalBody}>Nueva contraseña para {passwordTarget?.username}.</Text>
+                <Text style={styles.fieldLabel}>Contraseña nueva</Text>
+                <TextInput
+                  style={styles.input}
+                  value={newAdminPassword}
+                  onChangeText={setNewAdminPassword}
+                  secureTextEntry
+                  placeholder="Contraseña nueva"
+                  placeholderTextColor={colors.textSecondary}
+                />
+                {passwordError ? <Text style={styles.error}>{passwordError}</Text> : null}
+                <View style={styles.modalActions}>
+                  <Pressable
+                    style={({ hovered }: PressableState) => [
+                      styles.modalCancelBtn,
+                      hovered && styles.modalCancelBtnHovered,
+                      CURSOR_POINTER,
+                    ]}
+                    onPress={() => setPasswordTarget(null)}
+                  >
+                    <Text style={styles.modalCancelBtnText}>Cancelar</Text>
+                  </Pressable>
+                  <Button title="Guardar" onPress={confirmChangePassword} loading={passwordSubmitting} />
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </Screen>
   );
 }
@@ -394,7 +479,12 @@ const styles = StyleSheet.create({
   colRole: { flex: 1 },
   colStatus: { flex: 1 },
   colDate: { flex: 2 },
-  colAction: { flex: 1, alignItems: 'flex-start' },
+  colAction: { flex: 2, alignItems: 'flex-start' },
+  actionGroup: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+
+  passwordBtn: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, backgroundColor: colors.white, borderColor: colors.border },
+  passwordBtnHovered: { backgroundColor: colors.background },
+  passwordBtnText: { fontSize: 12, fontWeight: '700', color: colors.text },
 
   selfNote: { fontSize: 12, color: colors.textSecondary, fontStyle: 'italic' },
   toggleBtn: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 8, borderWidth: 1 },

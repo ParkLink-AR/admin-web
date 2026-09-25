@@ -64,10 +64,10 @@ export default function UsersSearch() {
   return (
     <Screen style={styles.screen}>
       <View style={styles.body}>
-        <PageHeader title="Buscar usuarios" subtitle="Buscá por nombre, email o teléfono." />
+        <PageHeader title="Buscar usuarios" subtitle="Buscá por nombre, email o DNI." />
         <TextInput
           style={styles.input}
-          placeholder="Buscar por nombre, email o teléfono..."
+          placeholder="Buscar por nombre, email o DNI..."
           placeholderTextColor={colors.textSecondary}
           autoCapitalize="none"
           value={query}
@@ -76,7 +76,7 @@ export default function UsersSearch() {
         {loading ? <ActivityIndicator color={colors.teal} style={styles.spinner} /> : null}
         {error ? <Text style={styles.error}>{error}</Text> : null}
         {showEmptyHint ? (
-          <Text style={styles.hint}>Escribí un nombre, email o teléfono para buscar usuarios.</Text>
+          <Text style={styles.hint}>Escribí un nombre, email o DNI para buscar usuarios.</Text>
         ) : null}
         {showNoResults ? <Text style={styles.hint}>No se encontraron usuarios.</Text> : null}
 

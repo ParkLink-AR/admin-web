@@ -7,10 +7,15 @@ import { Button } from '@/src/components/Button';
 import { colors } from '@/src/theme/colors';
 import { getCommissionSettings, updateCommissionSettings } from '@/src/api/admin';
 import { ApiError } from '@/src/api/client';
+import { useSessionStore } from '@/src/store/useSessionStore';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 
 export default function Settings() {
+  // Changing the platform's commission cut is owner-level, not day-to-day support work --
+  // a regular ADMIN can see the current rate but not edit it, same reasoning as the
+  // "Administradores" screen being SUPERADMIN-only.
+  const isSuperadmin = useSessionStore((s) => s.user?.role === 'SUPERADMIN');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPercent, setCurrentPercent] = useState<number | null>(null);
@@ -95,20 +100,26 @@ export default function Settings() {
           <Text style={styles.hint}>
             Porcentaje actual: <Text style={styles.currentValue}>{currentPercent}%</Text>
           </Text>
-          <Text style={styles.label}>Nuevo porcentaje (0 a 100)</Text>
-          <TextInput
-            style={styles.input}
-            keyboardType="decimal-pad"
-            value={inputPercent}
-            onChangeText={(v) => {
-              setInputPercent(v);
-              setSaveError(null);
-            }}
-            placeholder="5.0"
-            placeholderTextColor={colors.textSecondary}
-          />
-          {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
-          <Button title="Guardar" onPress={handleSave} disabled={!isValid} loading={saving} style={styles.saveBtn} />
+          {isSuperadmin ? (
+            <>
+              <Text style={styles.label}>Nuevo porcentaje (0 a 100)</Text>
+              <TextInput
+                style={styles.input}
+                keyboardType="decimal-pad"
+                value={inputPercent}
+                onChangeText={(v) => {
+                  setInputPercent(v);
+                  setSaveError(null);
+                }}
+                placeholder="5.0"
+                placeholderTextColor={colors.textSecondary}
+              />
+              {saveError ? <Text style={styles.error}>{saveError}</Text> : null}
+              <Button title="Guardar" onPress={handleSave} disabled={!isValid} loading={saving} style={styles.saveBtn} />
+            </>
+          ) : (
+            <Text style={styles.readOnlyNote}>Solo los superadministradores pueden cambiar la comisión.</Text>
+          )}
         </Card>
       </View>
 
@@ -149,6 +160,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 16, fontWeight: '700', color: colors.text, marginBottom: 10 },
   hint: { fontSize: 14, color: colors.textSecondary, marginBottom: 16 },
   currentValue: { fontWeight: '700', color: colors.text },
+  readOnlyNote: { fontSize: 13, color: colors.textSecondary, fontStyle: 'italic' },
   label: { fontSize: 13, color: colors.textSecondary, marginBottom: 6 },
   input: {
     borderWidth: 1,
