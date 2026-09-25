@@ -49,7 +49,7 @@ export default function AdminLayout() {
       <View style={styles.desktopRoot}>
         <View style={styles.sidebar}>
           <View>
-            <Image source={require('@/assets/logo-letras.png')} style={styles.brandLogo} resizeMode="contain" />
+            <Image source={require('@/assets/logo-letras-darkmode.png')} style={styles.brandLogo} resizeMode="contain" />
             <Text style={styles.brandUsername} numberOfLines={1}>{user.username}</Text>
           </View>
           <View style={styles.sidebarNav}>
@@ -94,7 +94,7 @@ export default function AdminLayout() {
   return (
     <View style={styles.mobileRoot}>
       <View style={styles.mobileTopBar}>
-        <Image source={require('@/assets/logo-letras.png')} style={styles.mobileBrandLogo} resizeMode="contain" />
+        <Image source={require('@/assets/logo-letras-darkmode.png')} style={styles.mobileBrandLogo} resizeMode="contain" />
         <Pressable onPress={handleLogout} hitSlop={8}>
           <Ionicons name="log-out-outline" size={22} color={colors.danger} />
         </Pressable>
@@ -136,9 +136,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     justifyContent: 'space-between',
   },
-  brandLogo: { width: 152, height: 29 },
+  // logo-letras-darkmode.png is 2170x725 (~2.99:1), different proportions
+  // than the light logo -- sized to match that ratio, not copied from it.
+  brandLogo: { width: 152, height: 51 },
   brandUsername: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 8 },
-  mobileBrandLogo: { width: 132, height: 25 },
+  mobileBrandLogo: { width: 120, height: 40 },
   sidebarNav: { gap: 4, marginTop: 32 },
   sidebarItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 8 },
   sidebarItemActive: { backgroundColor: 'rgba(255,255,255,0.12)' },
