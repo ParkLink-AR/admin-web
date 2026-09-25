@@ -24,10 +24,10 @@
     "typescript": "~6.0.3"
   },
   "scripts": {
-    "start": "expo start --clear",
-    "android": "expo start --android --clear",
-    "ios": "expo start --ios --clear",
-    "web": "expo start --web"
+    "start": "expo start --clear --port 8082",
+    "android": "expo start --android --clear --port 8082",
+    "ios": "expo start --ios --clear --port 8082",
+    "web": "expo start --web --port 8082"
   },
   "private": true,
   "overrides": {
