@@ -32,6 +32,7 @@ interface AdminUserSummaryResponse {
   phone: string | null;
   first_name: string | null;
   last_name: string | null;
+  dni: string | null;
   account_type: AccountType;
   status: UserStatus;
   created_at: string;
@@ -56,6 +57,7 @@ function toAdminUserSummary(u: AdminUserSummaryResponse): AdminUserSummary {
     phone: u.phone,
     firstName: u.first_name,
     lastName: u.last_name,
+    dni: u.dni,
     accountType: u.account_type,
     status: u.status,
     createdAt: u.created_at,

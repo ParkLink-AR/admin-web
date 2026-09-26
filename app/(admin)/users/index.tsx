@@ -85,6 +85,7 @@ export default function UsersSearch() {
             <View style={styles.tableHeaderRow}>
               <Text style={[styles.th, styles.colName]}>Nombre</Text>
               <Text style={[styles.th, styles.colEmail]}>Email</Text>
+              <Text style={[styles.th, styles.colDni]}>DNI</Text>
               <Text style={[styles.th, styles.colType]}>Tipo</Text>
               <Text style={[styles.th, styles.colStatus]}>Estado</Text>
             </View>
@@ -98,6 +99,7 @@ export default function UsersSearch() {
                 >
                   <Text style={[styles.td, styles.colName]} numberOfLines={1}>{displayName(item)}</Text>
                   <Text style={[styles.tdSecondary, styles.colEmail]} numberOfLines={1}>{item.email}</Text>
+                  <Text style={[styles.tdSecondary, styles.colDni]} numberOfLines={1}>{item.dni ?? '-'}</Text>
                   <View style={styles.colType}>
                     <AccountTypeBadge accountType={item.accountType} />
                   </View>
@@ -118,6 +120,7 @@ export default function UsersSearch() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.name}>{displayName(item)}</Text>
                   <Text style={styles.email}>{item.email}</Text>
+                  {item.dni ? <Text style={styles.email}>DNI: {item.dni}</Text> : null}
                 </View>
                 <View style={styles.badges}>
                   <AccountTypeBadge accountType={item.accountType} />
@@ -190,6 +193,7 @@ const styles = StyleSheet.create({
   tdSecondary: { fontSize: 13, color: colors.textSecondary },
   colName: { flex: 2 },
   colEmail: { flex: 3 },
+  colDni: { flex: 1 },
   colType: { flex: 2 },
   colStatus: { flex: 1 },
 });
