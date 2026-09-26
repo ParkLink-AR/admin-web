@@ -6,6 +6,7 @@ import {
   BookingStatus,
   ParkingSpotStatus,
   PayoutStatus,
+  SettlementStatus,
   UserStatus,
 } from '@/src/types';
 
@@ -89,6 +90,18 @@ const PAYOUT_STATUS_COLOR: Record<PayoutStatus, string> = {
 };
 export function PayoutStatusBadge({ status }: { status: PayoutStatus }) {
   return <Badge label={PAYOUT_STATUS_LABEL[status]} color={PAYOUT_STATUS_COLOR[status]} />;
+}
+
+const SETTLEMENT_STATUS_LABEL: Record<SettlementStatus, string> = {
+  PENDING: 'A CONFIRMAR',
+  PAID: 'PAGADA',
+};
+const SETTLEMENT_STATUS_COLOR: Record<SettlementStatus, string> = {
+  PENDING: colors.warning,
+  PAID: colors.success,
+};
+export function SettlementStatusBadge({ status }: { status: SettlementStatus }) {
+  return <Badge label={SETTLEMENT_STATUS_LABEL[status]} color={SETTLEMENT_STATUS_COLOR[status]} />;
 }
 
 const ADMIN_ROLE_LABEL: Record<AdminAccountRole, string> = {

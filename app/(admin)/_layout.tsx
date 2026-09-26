@@ -10,7 +10,8 @@ type PressableState = { pressed: boolean; hovered?: boolean };
 const NAV_ITEMS: { href: string; match: string; label: string; icon: keyof typeof Ionicons.glyphMap; superadminOnly?: boolean }[] = [
   { href: '/(admin)/home', match: '/home', label: 'Inicio', icon: 'home' },
   { href: '/(admin)/users', match: '/users', label: 'Buscar usuarios', icon: 'people' },
-  { href: '/(admin)/payouts', match: '/payouts', label: 'Pagos pendientes', icon: 'cash' },
+  { href: '/(admin)/payouts', match: '/payouts', label: 'Saldos pendientes', icon: 'cash' },
+  { href: '/(admin)/settlements', match: '/settlements', label: 'Liquidaciones', icon: 'receipt' },
   { href: '/(admin)/accounts', match: '/accounts', label: 'Administradores', icon: 'shield-checkmark', superadminOnly: true },
   { href: '/(admin)/settings', match: '/settings', label: 'Configuración', icon: 'settings' },
 ];

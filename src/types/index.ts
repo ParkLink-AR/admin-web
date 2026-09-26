@@ -111,7 +111,53 @@ export interface Payout {
   paidAt: string | null;
   paidByAdminId: string | null;
   proofUrl: string | null;
+  // Which Settlement this payout was frozen into, once an admin drafts one for its
+  // owner -- null while it's still unattached (see OwnerPendingBalance/getOwnerPendingPayouts).
+  settlementId: string | null;
   createdAt: string;
+}
+
+// One owner who currently has >=1 unattached (not yet drafted into any settlement)
+// payout -- GET /admin/owners/pending-balances, the new "who do I owe money to" screen.
+export interface OwnerPendingBalance {
+  ownerId: string;
+  pendingNetAmount: number; // centavos
+  pendingCount: number;
+  oldestPendingAt: string;
+}
+
+export type SettlementStatus = 'PENDING' | 'PAID';
+
+// A booking-level line item inside a Settlement -- same shape as a Payout minus the
+// fields that don't make sense once it's bundled (status/ownerId/paidAt/etc. all live
+// on the parent Settlement instead).
+export interface SettlementPayout {
+  id: string;
+  bookingId: string;
+  grossAmount: number; // centavos
+  commissionAmount: number; // centavos
+  netAmount: number; // centavos
+}
+
+// Batched payout to an owner -- replaces per-payout mark-paid. Drafted via
+// POST /admin/owners/{id}/settlements (freezes every currently-pending payout for that
+// owner), then confirmed via POST /admin/settlements/{id}/confirm once the real bank
+// transfer went out, or cancelled via POST /admin/settlements/{id}/cancel to release its
+// payouts back to unattached.
+export interface Settlement {
+  id: string;
+  ownerId: string;
+  grossAmount: number; // centavos
+  commissionAmount: number; // centavos
+  netAmount: number; // centavos
+  status: SettlementStatus;
+  proofUrl: string | null;
+  paidAt: string | null; // set only once confirmed
+  paidByAdminId: string | null; // set only once confirmed
+  createdByAdminId: string; // set at draft time
+  createdAt: string;
+  // Only populated on the single-settlement detail fetch, omitted on list items.
+  payouts?: SettlementPayout[];
 }
 
 export interface CommissionSettings {

@@ -10,11 +10,15 @@ import {
   BookingStatus,
   CommissionSettings,
   DriverBooking,
+  OwnerPendingBalance,
   OwnerReceivedBooking,
   ParkingSpot,
   ParkingSpotStatus,
   Payout,
   PayoutStatus,
+  Settlement,
+  SettlementPayout,
+  SettlementStatus,
   UserStatus,
 } from '@/src/types';
 
@@ -215,13 +219,22 @@ export async function getOwnerReceivedBookings(ownerId: string): Promise<OwnerRe
 }
 
 // -------------------------
-// Payouts (booking-service, ADMIN, via gateway)
+// Payouts & Settlements (booking-service, ADMIN, via gateway)
+//
+// Individual booking payouts still accumulate automatically and unattached
+// (not yet drafted into a Settlement) ones can be listed per-owner, but
+// paying an owner is no longer a per-payout action: an admin drafts a
+// Settlement (freezes every currently-pending payout for that owner), then
+// confirms it once the real bank transfer went out (optionally attaching a
+// proof photo), or cancels the draft to release its payouts back to
+// unattached. There is no more per-payout mark-paid endpoint.
 // -------------------------
 
 interface PayoutResponse {
   id: string;
   booking_id: string;
   owner_id: string;
+  payment_id?: string | null;
   gross_amount: number;
   commission_amount: number;
   net_amount: number;
@@ -229,6 +242,7 @@ interface PayoutResponse {
   paid_at?: string | null;
   paid_by_admin_id?: string | null;
   proof_url?: string | null;
+  settlement_id?: string | null;
   created_at: string;
 }
 
@@ -244,19 +258,101 @@ function toPayout(p: PayoutResponse): Payout {
     paidAt: p.paid_at ?? null,
     paidByAdminId: p.paid_by_admin_id ?? null,
     proofUrl: p.proof_url ?? null,
+    settlementId: p.settlement_id ?? null,
     createdAt: p.created_at,
   };
 }
 
-export async function listPayouts(status?: PayoutStatus): Promise<Payout[]> {
-  const path = status ? `/admin/payouts?status=${status.toLowerCase()}` : '/admin/payouts';
-  const response = await request<PayoutResponse[]>(path);
+interface OwnerPendingBalanceResponse {
+  owner_id: string;
+  pending_net_amount: number;
+  pending_count: number;
+  oldest_pending_at: string;
+}
+
+function toOwnerPendingBalance(b: OwnerPendingBalanceResponse): OwnerPendingBalance {
+  return {
+    ownerId: b.owner_id,
+    pendingNetAmount: b.pending_net_amount,
+    pendingCount: b.pending_count,
+    oldestPendingAt: b.oldest_pending_at,
+  };
+}
+
+// "Who do I owe money to" -- one row per owner with at least one unattached pending
+// payout. The starting screen for the whole payouts flow.
+export async function getOwnerPendingBalances(): Promise<OwnerPendingBalance[]> {
+  const response = await request<OwnerPendingBalanceResponse[]>('/admin/owners/pending-balances');
+  return response.map(toOwnerPendingBalance);
+}
+
+// The individual bookings making up one owner's pending balance, shown before drafting
+// a settlement so the admin can see exactly what they're about to freeze.
+export async function getOwnerPendingPayouts(ownerId: string): Promise<Payout[]> {
+  const response = await request<PayoutResponse[]>(
+    `/admin/payouts?status=pending&owner_id=${ownerId}`
+  );
   return response.map(toPayout);
 }
 
-export async function getPayout(payoutId: string): Promise<Payout> {
-  const response = await request<PayoutResponse>(`/admin/payouts/${payoutId}`);
-  return toPayout(response);
+interface SettlementPayoutResponse {
+  id: string;
+  booking_id: string;
+  gross_amount: number;
+  commission_amount: number;
+  net_amount: number;
+}
+
+function toSettlementPayout(p: SettlementPayoutResponse): SettlementPayout {
+  return {
+    id: p.id,
+    bookingId: p.booking_id,
+    grossAmount: p.gross_amount,
+    commissionAmount: p.commission_amount,
+    netAmount: p.net_amount,
+  };
+}
+
+interface SettlementResponse {
+  id: string;
+  owner_id: string;
+  gross_amount: number;
+  commission_amount: number;
+  net_amount: number;
+  status: SettlementStatus;
+  proof_url: string | null;
+  paid_at: string | null;
+  paid_by_admin_id: string | null;
+  created_by_admin_id: string;
+  created_at: string;
+  payouts?: SettlementPayoutResponse[];
+}
+
+function toSettlement(s: SettlementResponse): Settlement {
+  return {
+    id: s.id,
+    ownerId: s.owner_id,
+    grossAmount: s.gross_amount,
+    commissionAmount: s.commission_amount,
+    netAmount: s.net_amount,
+    status: s.status,
+    proofUrl: s.proof_url,
+    paidAt: s.paid_at,
+    paidByAdminId: s.paid_by_admin_id,
+    createdByAdminId: s.created_by_admin_id,
+    createdAt: s.created_at,
+    payouts: s.payouts?.map(toSettlementPayout),
+  };
+}
+
+// Phase 1, "draft": freezes every currently-pending payout for this owner into a new
+// PENDING Settlement. Plain POST, no body. 400 NOTHING_TO_SETTLE if the owner has none
+// (e.g. another admin drafted one moments earlier).
+export async function draftSettlement(ownerId: string): Promise<Settlement> {
+  const response = await request<SettlementResponse>(`/admin/owners/${ownerId}/settlements`, {
+    method: 'POST',
+  });
+  return toSettlement(response);
 }
 
 export interface ProofAsset {
@@ -265,11 +361,12 @@ export interface ProofAsset {
   type: string;
 }
 
-// The admin's user id comes from their JWT (the gateway injects X-User-Id
-// server-side) -- nothing else is sent besides the optional proof photo.
-// FormData built the same web-vs-native way as
-// mobile/src/api/auth.ts's uploadAvatar().
-export async function markPayoutPaid(payoutId: string, proof?: ProofAsset): Promise<Payout> {
+// Phase 2, "confirm": asserts the bank transfer actually went out. The admin's user id
+// comes from their JWT (the gateway injects X-User-Id server-side) -- nothing else is
+// sent besides the optional proof photo. FormData built the same web-vs-native way as
+// mobile/src/api/auth.ts's uploadAvatar() (carried over from the old per-payout
+// mark-paid flow this replaces).
+export async function confirmSettlement(settlementId: string, proof?: ProofAsset): Promise<Settlement> {
   const formData = new FormData();
   if (proof) {
     if (Platform.OS === 'web') {
@@ -289,8 +386,29 @@ export async function markPayoutPaid(payoutId: string, proof?: ProofAsset): Prom
       } as unknown as Blob);
     }
   }
-  const response = await requestMultipart<PayoutResponse>(`/admin/payouts/${payoutId}/mark-paid`, formData);
-  return toPayout(response);
+  const response = await requestMultipart<SettlementResponse>(
+    `/admin/settlements/${settlementId}/confirm`,
+    formData
+  );
+  return toSettlement(response);
+}
+
+// Undoes a mistaken draft before confirmation -- releases its payouts back to
+// unattached (they reappear in getOwnerPendingBalances) and removes the draft. 204 on
+// success.
+export async function cancelSettlement(settlementId: string): Promise<void> {
+  await request<void>(`/admin/settlements/${settlementId}/cancel`, { method: 'POST' });
+}
+
+export async function listSettlements(status?: SettlementStatus): Promise<Settlement[]> {
+  const path = status ? `/admin/settlements?status=${status.toLowerCase()}` : '/admin/settlements';
+  const response = await request<SettlementResponse[]>(path);
+  return response.map(toSettlement);
+}
+
+export async function getSettlement(settlementId: string): Promise<Settlement> {
+  const response = await request<SettlementResponse>(`/admin/settlements/${settlementId}`);
+  return toSettlement(response);
 }
 
 // -------------------------

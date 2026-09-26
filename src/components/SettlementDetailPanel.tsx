@@ -15,11 +15,11 @@ import {
 import * as ImagePicker from 'expo-image-picker';
 import { Card } from '@/src/components/Card';
 import { Button } from '@/src/components/Button';
-import { PayoutStatusBadge } from '@/src/components/Badge';
+import { SettlementStatusBadge } from '@/src/components/Badge';
 import { colors } from '@/src/theme/colors';
 import { formatCentavos } from '@/src/services/money';
-import { getPayout, markPayoutPaid, ProofAsset } from '@/src/api/admin';
-import { Payout } from '@/src/types';
+import { getSettlement, confirmSettlement, cancelSettlement, ProofAsset } from '@/src/api/admin';
+import { Settlement } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
@@ -35,18 +35,22 @@ function formatDate(iso: string) {
   });
 }
 
-interface PayoutDetailPanelProps {
-  payoutId: string;
-  /** Called after a successful mark-paid, e.g. so a list pane can refresh. */
-  onChanged?: (payout: Payout) => void;
+interface SettlementDetailPanelProps {
+  settlementId: string;
+  /** Called after a successful confirm, e.g. so a list pane can refresh. */
+  onConfirmed?: (settlement: Settlement) => void;
+  /** Called after a successful cancel -- the settlement no longer exists, so callers
+   *  should navigate away or drop it from a list rather than try to re-render it. */
+  onCancelled?: (settlementId: string) => void;
 }
 
-// The full "Detalle de pago" view -- shared between the standalone route
-// (app/(admin)/payouts/[id].tsx, used on narrow windows / direct links) and
-// the desktop two-pane master-detail layout (app/(admin)/payouts/index.tsx),
-// so the mark-paid flow only lives in one place.
-export function PayoutDetailPanel({ payoutId, onChanged }: PayoutDetailPanelProps) {
-  const [payout, setPayout] = useState<Payout | null>(null);
+// The full "Detalle de liquidación" view -- shared between the standalone route
+// (app/(admin)/settlements/[id].tsx, used on narrow windows / direct links) and the
+// desktop two-pane master-detail layout (app/(admin)/settlements/index.tsx). Structurally
+// mirrors the old PayoutDetailPanel this replaces, but built around a batched Settlement
+// (confirm/cancel) instead of a single Payout (mark-paid).
+export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }: SettlementDetailPanelProps) {
+  const [settlement, setSettlement] = useState<Settlement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,18 +60,23 @@ export function PayoutDetailPanel({ payoutId, onChanged }: PayoutDetailPanelProp
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [successVisible, setSuccessVisible] = useState(false);
 
+  const [cancelVisible, setCancelVisible] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+  const [cancelError, setCancelError] = useState<string | null>(null);
+
   useEffect(() => {
     let cancelled = false;
     setLoading(true);
     setError(null);
     setProof(null);
     setSubmitError(null);
-    getPayout(payoutId)
-      .then((p) => {
-        if (!cancelled) setPayout(p);
+    setCancelError(null);
+    getSettlement(settlementId)
+      .then((s) => {
+        if (!cancelled) setSettlement(s);
       })
       .catch((err) => {
-        if (!cancelled) setError(err instanceof ApiError ? err.detail : 'No se pudo cargar el pago.');
+        if (!cancelled) setError(err instanceof ApiError ? err.detail : 'No se pudo cargar la liquidación.');
       })
       .finally(() => {
         if (!cancelled) setLoading(false);
@@ -75,7 +84,7 @@ export function PayoutDetailPanel({ payoutId, onChanged }: PayoutDetailPanelProp
     return () => {
       cancelled = true;
     };
-  }, [payoutId]);
+  }, [settlementId]);
 
   async function pickProof() {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -96,20 +105,35 @@ export function PayoutDetailPanel({ payoutId, onChanged }: PayoutDetailPanelProp
     });
   }
 
-  async function confirmMarkPaid() {
-    if (!payout) return;
+  async function confirmPayment() {
+    if (!settlement) return;
     setConfirmVisible(false);
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const updated = await markPayoutPaid(payout.id, proof ?? undefined);
-      setPayout(updated);
+      const updated = await confirmSettlement(settlement.id, proof ?? undefined);
+      setSettlement(updated);
       setSuccessVisible(true);
-      onChanged?.(updated);
+      onConfirmed?.(updated);
     } catch (err) {
-      setSubmitError(err instanceof ApiError ? err.detail : 'No se pudo marcar el pago como pagado.');
+      setSubmitError(err instanceof ApiError ? err.detail : 'No se pudo confirmar el pago.');
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function confirmCancel() {
+    if (!settlement) return;
+    setCancelVisible(false);
+    setCancelling(true);
+    setCancelError(null);
+    try {
+      await cancelSettlement(settlement.id);
+      onCancelled?.(settlement.id);
+    } catch (err) {
+      setCancelError(err instanceof ApiError ? err.detail : 'No se pudo cancelar la liquidación.');
+    } finally {
+      setCancelling(false);
     }
   }
 
@@ -121,10 +145,10 @@ export function PayoutDetailPanel({ payoutId, onChanged }: PayoutDetailPanelProp
     );
   }
 
-  if (error || !payout) {
+  if (error || !settlement) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.error}>{error ?? 'Pago no encontrado.'}</Text>
+        <Text style={styles.error}>{error ?? 'Liquidación no encontrada.'}</Text>
       </View>
     );
   }
@@ -134,53 +158,81 @@ export function PayoutDetailPanel({ payoutId, onChanged }: PayoutDetailPanelProp
       <ScrollView contentContainerStyle={styles.body}>
         <Card>
           <View style={styles.headerRow}>
-            <Text style={styles.title}>Pago #{payout.id.slice(0, 8)}</Text>
-            <PayoutStatusBadge status={payout.status} />
+            <Text style={styles.title}>Liquidación #{settlement.id.slice(0, 8)}</Text>
+            <SettlementStatusBadge status={settlement.status} />
           </View>
 
-          <DataRow label="Bruto" value={formatCentavos(payout.grossAmount)} />
-          <DataRow label="Comisión" value={`- ${formatCentavos(payout.commissionAmount)}`} />
+          <DataRow label="Bruto" value={formatCentavos(settlement.grossAmount)} />
+          <DataRow label="Comisión" value={`- ${formatCentavos(settlement.commissionAmount)}`} />
           <View style={styles.divider} />
-          <DataRow label="Neto a pagar" value={formatCentavos(payout.netAmount)} emphasize />
+          <DataRow label="Neto a pagar" value={formatCentavos(settlement.netAmount)} emphasize />
 
           <View style={styles.divider} />
-          <DataRow label="Reserva" value={payout.bookingId} />
           <Pressable
-            onPress={() => router.push(`/(admin)/users/${payout.ownerId}`)}
+            onPress={() => router.push(`/(admin)/users/${settlement.ownerId}`)}
             style={({ hovered }: PressableState) => [hovered && styles.linkRowHovered, CURSOR_POINTER]}
           >
-            <DataRow label="Dueño" value={payout.ownerId} link />
+            <DataRow label="Dueño" value={settlement.ownerId} link />
           </Pressable>
-          <DataRow label="Creado" value={formatDate(payout.createdAt)} />
+          <DataRow label="Creado" value={formatDate(settlement.createdAt)} />
+          <DataRow label="Creado por" value={settlement.createdByAdminId} />
         </Card>
 
-        {payout.status === 'PAID' ? (
+        {settlement.payouts && settlement.payouts.length > 0 ? (
+          <Card>
+            <Text style={styles.sectionTitle}>Reservas incluidas ({settlement.payouts.length})</Text>
+            {settlement.payouts.map((p) => (
+              <View key={p.id} style={styles.payoutRow}>
+                <Text style={styles.payoutBooking}>Reserva: {p.bookingId}</Text>
+                <Text style={styles.payoutAmount}>{formatCentavos(p.netAmount)}</Text>
+              </View>
+            ))}
+          </Card>
+        ) : null}
+
+        {settlement.status === 'PAID' ? (
           <Card>
             <Text style={styles.sectionTitle}>Detalle del pago</Text>
-            {payout.paidAt ? <DataRow label="Pagado el" value={formatDate(payout.paidAt)} /> : null}
-            {payout.paidByAdminId ? <DataRow label="Pagado por" value={payout.paidByAdminId} /> : null}
-            {payout.proofUrl ? (
-              <Image source={{ uri: payout.proofUrl }} style={styles.proofImage} resizeMode="contain" />
+            {settlement.paidAt ? <DataRow label="Pagado el" value={formatDate(settlement.paidAt)} /> : null}
+            {settlement.paidByAdminId ? <DataRow label="Pagado por" value={settlement.paidByAdminId} /> : null}
+            {settlement.proofUrl ? (
+              <Image source={{ uri: settlement.proofUrl }} style={styles.proofImage} resizeMode="contain" />
             ) : (
               <Text style={styles.hint}>No se adjuntó comprobante.</Text>
             )}
           </Card>
         ) : (
-          <Card>
-            <Text style={styles.sectionTitle}>Marcar como pagado</Text>
-            <Text style={styles.hint}>
-              Adjuntá una foto del comprobante de la transferencia (opcional) y confirmá el pago.
-            </Text>
-            {proof ? <Image source={{ uri: proof.uri }} style={styles.proofImage} resizeMode="contain" /> : null}
-            <Button
-              title={proof ? 'Cambiar comprobante' : 'Adjuntar comprobante'}
-              variant="secondary"
-              onPress={pickProof}
-              style={styles.attachBtn}
-            />
-            {submitError ? <Text style={styles.error}>{submitError}</Text> : null}
-            <Button title="Marcar como pagado" onPress={() => setConfirmVisible(true)} loading={submitting} />
-          </Card>
+          <>
+            <Card>
+              <Text style={styles.sectionTitle}>Confirmar pago</Text>
+              <Text style={styles.hint}>
+                Adjuntá una foto del comprobante de la transferencia (opcional) y confirmá que el pago se realizó.
+              </Text>
+              {proof ? <Image source={{ uri: proof.uri }} style={styles.proofImage} resizeMode="contain" /> : null}
+              <Button
+                title={proof ? 'Cambiar comprobante' : 'Adjuntar comprobante'}
+                variant="secondary"
+                onPress={pickProof}
+                style={styles.attachBtn}
+              />
+              {submitError ? <Text style={styles.error}>{submitError}</Text> : null}
+              <Button title="Confirmar pago" onPress={() => setConfirmVisible(true)} loading={submitting} />
+            </Card>
+
+            <Card>
+              <Text style={styles.sectionTitle}>Cancelar liquidación</Text>
+              <Text style={styles.hint}>
+                Deshace este borrador y libera sus pagos, que vuelven a aparecer en "Saldos pendientes".
+              </Text>
+              {cancelError ? <Text style={styles.error}>{cancelError}</Text> : null}
+              <Button
+                title="Cancelar liquidación"
+                variant="danger"
+                onPress={() => setCancelVisible(true)}
+                loading={cancelling}
+              />
+            </Card>
+          </>
         )}
       </ScrollView>
 
@@ -191,22 +243,47 @@ export function PayoutDetailPanel({ payoutId, onChanged }: PayoutDetailPanelProp
               <View style={styles.modalSheet}>
                 <Text style={styles.modalTitle}>Confirmar pago</Text>
                 <Text style={styles.modalBody}>
-                  Vas a marcar este pago de {formatCentavos(payout.netAmount)} como pagado. Esta acción no se puede
-                  deshacer.
+                  Vas a marcar esta liquidación de {formatCentavos(settlement.netAmount)} como pagada. Esta acción no
+                  se puede deshacer.
                 </Text>
                 <View style={styles.modalActions}>
                   <Pressable
                     style={({ hovered }: PressableState) => [styles.modalCancelBtn, hovered && styles.modalCancelBtnHovered, CURSOR_POINTER]}
                     onPress={() => setConfirmVisible(false)}
                   >
-                    <Text style={styles.modalCancelBtnText}>Cancelar</Text>
+                    <Text style={styles.modalCancelBtnText}>Volver</Text>
                   </Pressable>
                   <Pressable
                     style={({ hovered }: PressableState) => [styles.modalConfirmBtn, hovered && styles.modalConfirmBtnHovered, CURSOR_POINTER]}
-                    onPress={confirmMarkPaid}
+                    onPress={confirmPayment}
                   >
                     <Text style={styles.modalConfirmBtnText}>Confirmar</Text>
                   </Pressable>
+                </View>
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
+
+      <Modal visible={cancelVisible} transparent animationType="fade" onRequestClose={() => setCancelVisible(false)}>
+        <TouchableWithoutFeedback onPress={() => setCancelVisible(false)}>
+          <View style={styles.modalOverlay}>
+            <TouchableWithoutFeedback>
+              <View style={styles.modalSheet}>
+                <Text style={styles.modalTitle}>Cancelar liquidación</Text>
+                <Text style={styles.modalBody}>
+                  Esta liquidación de {formatCentavos(settlement.netAmount)} se va a eliminar y sus pagos vuelven a
+                  quedar pendientes sin liquidar. Esta acción no se puede deshacer.
+                </Text>
+                <View style={styles.modalActions}>
+                  <Pressable
+                    style={({ hovered }: PressableState) => [styles.modalCancelBtn, hovered && styles.modalCancelBtnHovered, CURSOR_POINTER]}
+                    onPress={() => setCancelVisible(false)}
+                  >
+                    <Text style={styles.modalCancelBtnText}>Volver</Text>
+                  </Pressable>
+                  <Button title="Sí, cancelar" variant="danger" onPress={confirmCancel} loading={cancelling} />
                 </View>
               </View>
             </TouchableWithoutFeedback>
@@ -220,7 +297,7 @@ export function PayoutDetailPanel({ payoutId, onChanged }: PayoutDetailPanelProp
             <TouchableWithoutFeedback>
               <View style={styles.modalSheet}>
                 <Text style={styles.modalTitle}>Pago realizado</Text>
-                <Text style={styles.modalBody}>El pago se marcó como pagado correctamente.</Text>
+                <Text style={styles.modalBody}>La liquidación se marcó como pagada correctamente.</Text>
                 <View style={styles.modalActions}>
                   <Pressable
                     style={({ hovered }: PressableState) => [styles.modalConfirmBtn, hovered && styles.modalConfirmBtnHovered, CURSOR_POINTER]}
@@ -264,13 +341,16 @@ const styles = StyleSheet.create({
   linkRowHovered: { backgroundColor: colors.background, borderRadius: 6 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 8 },
   hint: { fontSize: 13, color: colors.textSecondary, marginBottom: 10 },
+  payoutRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 6 },
+  payoutBooking: { fontSize: 13, fontWeight: '600', color: colors.text },
+  payoutAmount: { fontSize: 13, fontWeight: '700', color: colors.text },
   proofImage: { width: '100%', height: 220, borderRadius: 10, marginBottom: 10, backgroundColor: colors.background },
   attachBtn: { marginBottom: 10 },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(4, 35, 71, 0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   modalSheet: { backgroundColor: colors.surface, borderRadius: 16, padding: 20, width: '100%', maxWidth: 400, gap: 8 },
   modalTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
   modalBody: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 14, justifyContent: 'flex-end' },
+  modalActions: { flexDirection: 'row', gap: 10, marginTop: 14, justifyContent: 'flex-end', alignItems: 'center' },
   modalCancelBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8 },
   modalCancelBtnHovered: { backgroundColor: colors.background },
   modalCancelBtnText: { color: colors.textSecondary, fontWeight: '600' },
