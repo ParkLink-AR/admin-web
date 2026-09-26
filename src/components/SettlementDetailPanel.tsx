@@ -18,8 +18,8 @@ import { Button } from '@/src/components/Button';
 import { SettlementStatusBadge } from '@/src/components/Badge';
 import { colors } from '@/src/theme/colors';
 import { formatCentavos } from '@/src/services/money';
-import { getSettlement, confirmSettlement, cancelSettlement, ProofAsset } from '@/src/api/admin';
-import { Settlement } from '@/src/types';
+import { getSettlement, getUserDetail, confirmSettlement, cancelSettlement, ProofAsset } from '@/src/api/admin';
+import { AdminUserDetail, Settlement } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
@@ -33,6 +33,11 @@ function formatDate(iso: string) {
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+function displayName(u: { firstName: string | null; lastName: string | null; email: string }) {
+  const name = [u.firstName, u.lastName].filter(Boolean).join(' ');
+  return name || u.email;
 }
 
 interface SettlementDetailPanelProps {
@@ -51,6 +56,7 @@ interface SettlementDetailPanelProps {
 // (confirm/cancel) instead of a single Payout (mark-paid).
 export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }: SettlementDetailPanelProps) {
   const [settlement, setSettlement] = useState<Settlement | null>(null);
+  const [owner, setOwner] = useState<AdminUserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,9 +77,17 @@ export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }
     setProof(null);
     setSubmitError(null);
     setCancelError(null);
+    setOwner(null);
     getSettlement(settlementId)
-      .then((s) => {
-        if (!cancelled) setSettlement(s);
+      .then(async (s) => {
+        if (cancelled) return;
+        setSettlement(s);
+        try {
+          const ownerDetail = await getUserDetail(s.ownerId);
+          if (!cancelled) setOwner(ownerDetail);
+        } catch {
+          // No datos de cobro to show if this fails -- not fatal to the rest of the panel.
+        }
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof ApiError ? err.detail : 'No se pudo cargar la liquidación.');
@@ -172,10 +186,25 @@ export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }
             onPress={() => router.push(`/(admin)/users/${settlement.ownerId}`)}
             style={({ hovered }: PressableState) => [hovered && styles.linkRowHovered, CURSOR_POINTER]}
           >
-            <DataRow label="Dueño" value={settlement.ownerId} link />
+            <DataRow label="Dueño" value={owner ? displayName(owner) : settlement.ownerId} link />
           </Pressable>
           <DataRow label="Creado" value={formatDate(settlement.createdAt)} />
           <DataRow label="Creado por" value={settlement.createdByAdminId} />
+        </Card>
+
+        <Card>
+          <Text style={styles.sectionTitle}>Datos de cobro</Text>
+          {owner?.hasPayoutInfo ? (
+            <>
+              <DataRow label="CBU" value={owner.cbu ?? '-'} />
+              <DataRow label="Titular" value={owner.payoutTitular ?? '-'} />
+              <DataRow label="CUIL" value={owner.cuil ?? '-'} />
+            </>
+          ) : (
+            <Text style={styles.hint}>
+              {owner ? 'Este dueño todavía no cargó sus datos de cobro.' : 'No se pudieron cargar los datos de cobro.'}
+            </Text>
+          )}
         </Card>
 
         {settlement.payouts && settlement.payouts.length > 0 ? (

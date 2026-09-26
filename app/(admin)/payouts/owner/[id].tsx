@@ -135,6 +135,28 @@ export default function OwnerPendingBalanceDetail() {
         </Card>
 
         <Card>
+          <Text style={styles.sectionTitle}>Datos de cobro</Text>
+          {owner.hasPayoutInfo ? (
+            <>
+              <View style={styles.payoutInfoRow}>
+                <Text style={styles.payoutInfoLabel}>CBU</Text>
+                <Text style={styles.payoutInfoValue}>{owner.cbu}</Text>
+              </View>
+              <View style={styles.payoutInfoRow}>
+                <Text style={styles.payoutInfoLabel}>Titular</Text>
+                <Text style={styles.payoutInfoValue}>{owner.payoutTitular}</Text>
+              </View>
+              <View style={styles.payoutInfoRow}>
+                <Text style={styles.payoutInfoLabel}>CUIL</Text>
+                <Text style={styles.payoutInfoValue}>{owner.cuil}</Text>
+              </View>
+            </>
+          ) : (
+            <Text style={styles.hint}>Este dueño todavía no cargó sus datos de cobro.</Text>
+          )}
+        </Card>
+
+        <Card>
           <Text style={styles.sectionTitle}>Reservas pendientes ({payouts.length})</Text>
           {payouts.length === 0 ? (
             <Text style={styles.hint}>Este dueño ya no tiene pagos pendientes.</Text>
@@ -240,6 +262,9 @@ const styles = StyleSheet.create({
 
   sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 8 },
   hint: { fontSize: 13, color: colors.textSecondary },
+  payoutInfoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+  payoutInfoLabel: { fontSize: 13, color: colors.textSecondary },
+  payoutInfoValue: { fontSize: 13, color: colors.text, fontWeight: '600' },
   payoutRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 10, paddingVertical: 8 },
   payoutBooking: { fontSize: 13, fontWeight: '600', color: colors.text },
   payoutAmount: { fontSize: 14, fontWeight: '700', color: colors.text },
