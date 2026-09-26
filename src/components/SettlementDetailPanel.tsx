@@ -18,7 +18,7 @@ import { Button } from '@/src/components/Button';
 import { SettlementStatusBadge } from '@/src/components/Badge';
 import { colors } from '@/src/theme/colors';
 import { formatCentavos } from '@/src/services/money';
-import { getSettlement, getUserDetail, confirmSettlement, cancelSettlement, ProofAsset } from '@/src/api/admin';
+import { getSettlement, getUserDetail, getAdminAccount, confirmSettlement, cancelSettlement, ProofAsset } from '@/src/api/admin';
 import { AdminUserDetail, Settlement } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 
@@ -57,6 +57,7 @@ interface SettlementDetailPanelProps {
 export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }: SettlementDetailPanelProps) {
   const [settlement, setSettlement] = useState<Settlement | null>(null);
   const [owner, setOwner] = useState<AdminUserDetail | null>(null);
+  const [adminUsernames, setAdminUsernames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +79,7 @@ export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }
     setSubmitError(null);
     setCancelError(null);
     setOwner(null);
+    setAdminUsernames({});
     getSettlement(settlementId)
       .then(async (s) => {
         if (cancelled) return;
@@ -88,6 +90,16 @@ export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }
         } catch {
           // No datos de cobro to show if this fails -- not fatal to the rest of the panel.
         }
+        // "Creado por"/"Pagado por" show a username, not a raw admin id -- resolve
+        // whichever of the two admin ids this settlement actually has.
+        const adminIds = [...new Set([s.createdByAdminId, s.paidByAdminId].filter((id): id is string => !!id))];
+        const resolved = await Promise.allSettled(adminIds.map((id) => getAdminAccount(id)));
+        if (cancelled) return;
+        const usernames: Record<string, string> = {};
+        resolved.forEach((result, i) => {
+          if (result.status === 'fulfilled') usernames[adminIds[i]] = result.value.username;
+        });
+        setAdminUsernames(usernames);
       })
       .catch((err) => {
         if (!cancelled) setError(err instanceof ApiError ? err.detail : 'No se pudo cargar la liquidación.');
@@ -189,7 +201,7 @@ export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }
             <DataRow label="Dueño" value={owner ? displayName(owner) : settlement.ownerId} link />
           </Pressable>
           <DataRow label="Creado" value={formatDate(settlement.createdAt)} />
-          <DataRow label="Creado por" value={settlement.createdByAdminId} />
+          <DataRow label="Creado por" value={adminUsernames[settlement.createdByAdminId] ?? settlement.createdByAdminId} />
         </Card>
 
         <Card>
@@ -223,7 +235,9 @@ export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }
           <Card>
             <Text style={styles.sectionTitle}>Detalle del pago</Text>
             {settlement.paidAt ? <DataRow label="Pagado el" value={formatDate(settlement.paidAt)} /> : null}
-            {settlement.paidByAdminId ? <DataRow label="Pagado por" value={settlement.paidByAdminId} /> : null}
+            {settlement.paidByAdminId ? (
+              <DataRow label="Pagado por" value={adminUsernames[settlement.paidByAdminId] ?? settlement.paidByAdminId} />
+            ) : null}
             {settlement.proofUrl ? (
               <Image source={{ uri: settlement.proofUrl }} style={styles.proofImage} resizeMode="contain" />
             ) : (

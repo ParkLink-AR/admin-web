@@ -457,6 +457,13 @@ function toAdminAccount(a: AdminAccountResponse): AdminAccount {
   };
 }
 
+// No superadmin gate on this one (see auth-service's get_admin_account) -- any admin can
+// resolve another admin id's username, e.g. a settlement's "creado por"/"pagado por".
+export async function getAdminAccount(id: string): Promise<AdminAccount> {
+  const response = await request<AdminAccountResponse>(`/admin/accounts/${id}`);
+  return toAdminAccount(response);
+}
+
 export async function listAdminAccounts(): Promise<AdminAccount[]> {
   const response = await request<AdminAccountResponse[]>('/admin/accounts');
   return response.map(toAdminAccount);
