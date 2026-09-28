@@ -225,6 +225,24 @@ function updateAdminTicketStatus(token, ticketId, status) {
   });
 }
 
+// ── Parking spot review queue (always real API calls, same reasoning as
+// tickets above -- staff need to see the actual pending spots) ───────────────
+
+function fetchPendingParkingSpots(token) {
+  return ticketFetch(`${CONFIG.GATEWAY_URL}/admin/parking-spots`, token);
+}
+
+function fetchParkingSpotForReview(token, spotId) {
+  return ticketFetch(`${CONFIG.GATEWAY_URL}/admin/parking-spots/${spotId}`, token);
+}
+
+function reviewParkingSpot(token, spotId, decision, notes) {
+  return ticketFetch(`${CONFIG.GATEWAY_URL}/admin/parking-spots/${spotId}/review`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ decision, ...(notes ? { notes } : {}) }),
+  });
+}
+
 // ── Master loader ─────────────────────────────────────────────────────────────
 
 async function loadAllMetrics(token) {

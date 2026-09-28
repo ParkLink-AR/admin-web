@@ -66,6 +66,15 @@
         Reservas
       </a>
 
+      <div class="nav-label" style="margin-top:12px">Moderación</div>
+      <a class="nav-item" data-page="spot-review" href="#">
+        <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+          <path d="M9 11l3 3L22 4"/>
+          <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+        </svg>
+        Cocheras pendientes
+      </a>
+
       <div class="nav-label" style="margin-top:12px">Soporte</div>
       <a class="nav-item" data-page="tickets" href="#">
         <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
@@ -532,6 +541,72 @@
       </div>
     </section>
 
+    <!-- ══════════════════════════ PAGE: SPOT REVIEW ══════════════════════════ -->
+    <section class="page" id="page-spot-review">
+      <div class="page-header">
+        <div>
+          <div class="page-title">Cocheras pendientes de revisión</div>
+          <div class="page-subtitle">Cocheras nuevas que todavía no aparecen en las búsquedas -- revisá la documentación antes de aprobarlas</div>
+        </div>
+        <span class="last-updated" id="last-updated-spot-review">—</span>
+      </div>
+
+      <div class="chart-card">
+        <div class="chart-card-header">
+          <div>
+            <div class="chart-card-title">Cola de revisión</div>
+            <div class="chart-card-sub" id="spot-review-count-sub">—</div>
+          </div>
+          <button class="btn btn-ghost" id="btn-refresh-spot-review">↻ Actualizar</button>
+        </div>
+        <table class="info-table">
+          <thead>
+            <tr>
+              <th>Cochera</th>
+              <th>Dirección</th>
+              <th>Dueño</th>
+              <th>Documentación</th>
+              <th>Creada</th>
+            </tr>
+          </thead>
+          <tbody id="spot-review-table-body">
+          </tbody>
+        </table>
+        <div class="alert alert-warn" id="spot-review-empty" style="display:none">
+          <span>No hay cocheras pendientes de revisión.</span>
+        </div>
+        <div class="alert alert-warn" id="spot-review-error" style="display:none">
+          <span>
+            No pudimos cargar la cola de revisión. Verificá que pegaste un JWT con <code>role: "admin"</code>
+            en el campo de arriba y que el gateway/parking-service estén corriendo.
+          </span>
+        </div>
+      </div>
+
+      <div class="chart-card" id="spot-review-detail-card" style="display:none">
+        <div class="chart-card-header">
+          <div>
+            <div class="chart-card-title" id="spot-review-detail-title">—</div>
+            <div class="chart-card-sub" id="spot-review-detail-meta">—</div>
+          </div>
+        </div>
+        <div id="spot-review-photos" style="display:flex;flex-wrap:wrap;gap:8px;padding:4px"></div>
+        <div class="alert alert-warn" id="spot-review-no-photos" style="display:none;margin-top:8px">
+          <span>El dueño todavía no subió fotos de documentación.</span>
+        </div>
+        <textarea
+          id="spot-review-notes"
+          class="token-input"
+          style="width:100%;min-height:56px;resize:vertical;font-family:inherit;margin-top:12px"
+          placeholder="Motivo (obligatorio si rechazás, opcional si aprobás)..."
+        ></textarea>
+        <div style="display:flex;gap:8px;margin-top:8px">
+          <button class="btn btn-primary" id="btn-approve-spot">✓ Aprobar</button>
+          <button class="btn btn-ghost" id="btn-reject-spot" style="border-color:var(--danger,#ef4444);color:var(--danger,#ef4444)">✕ Rechazar</button>
+        </div>
+      </div>
+    </section>
+
     <!-- ══════════════════════════ PAGE: TICKETS ══════════════════════════ -->
     <section class="page" id="page-tickets">
       <div class="page-header">
@@ -655,6 +730,7 @@ const PAGES = {
   users:    { el: "page-users",    title: "Usuarios" },
   parking:  { el: "page-parking",  title: "Cocheras" },
   bookings: { el: "page-bookings", title: "Reservas" },
+  "spot-review": { el: "page-spot-review", title: "Cocheras Pendientes" },
   tickets:  { el: "page-tickets",  title: "Tickets de Soporte" },
   health:   { el: "page-health",   title: "Estado de Servicios" },
 };
@@ -673,6 +749,7 @@ function navigateTo(pageKey) {
   document.getElementById("topbar-title").textContent = cfg.title;
 
   if (pageKey === "tickets") loadTickets();
+  if (pageKey === "spot-review") loadPendingSpots();
 }
 
 document.querySelectorAll(".nav-item[data-page]").forEach((el) => {
@@ -912,6 +989,122 @@ async function refresh() {
 }
 
 // ── Support tickets ────────────────────────────────────────────────────────────
+
+// ── Parking spot review queue ────────────────────────────────────────────────
+
+let selectedSpotId = null;
+
+function fmtSpotDate(iso) {
+  return new Date(iso).toLocaleString("es-AR", { hour12: false });
+}
+
+async function loadPendingSpots() {
+  document.getElementById("last-updated-spot-review").textContent = `Actualizado: ${nowStr()}`;
+  document.getElementById("spot-review-error").style.display = "none";
+  document.getElementById("spot-review-empty").style.display = "none";
+
+  const tbody = document.getElementById("spot-review-table-body");
+
+  try {
+    const spots = await fetchPendingParkingSpots(adminToken());
+    document.getElementById("spot-review-count-sub").textContent =
+      `${spots.length} cochera${spots.length === 1 ? "" : "s"} pendiente${spots.length === 1 ? "" : "s"}`;
+
+    tbody.innerHTML = "";
+    if (spots.length === 0) {
+      document.getElementById("spot-review-empty").style.display = "flex";
+      return;
+    }
+
+    for (const spot of spots) {
+      const photoCount = (spot.verificationPhotos || []).length;
+      const tr = document.createElement("tr");
+      tr.style.cursor = "pointer";
+      tr.innerHTML = `
+        <td><strong>${escapeHtml(spot.title)}</strong></td>
+        <td>${escapeHtml(spot.address)}</td>
+        <td><code style="font-size:12px">${spot.ownerId.slice(0, 8)}…</code></td>
+        <td><span class="badge ${photoCount > 0 ? "badge-green" : "badge-orange"}">${photoCount} foto${photoCount === 1 ? "" : "s"}</span></td>
+        <td>${fmtSpotDate(spot.createdAt)}</td>
+      `;
+      tr.addEventListener("click", () => openSpotReviewDetail(spot.id));
+      tbody.appendChild(tr);
+    }
+  } catch (err) {
+    console.error("Error loading pending spots:", err);
+    document.getElementById("spot-review-count-sub").textContent = "—";
+    tbody.innerHTML = "";
+    document.getElementById("spot-review-error").style.display = "flex";
+  }
+}
+
+async function openSpotReviewDetail(spotId) {
+  selectedSpotId = spotId;
+  const card = document.getElementById("spot-review-detail-card");
+  card.style.display = "block";
+  card.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+  document.getElementById("spot-review-detail-title").textContent = "Cargando…";
+  document.getElementById("spot-review-detail-meta").textContent = "";
+  document.getElementById("spot-review-photos").innerHTML = "";
+  document.getElementById("spot-review-notes").value = "";
+
+  try {
+    const spot = await fetchParkingSpotForReview(adminToken(), spotId);
+    renderSpotReviewDetail(spot);
+  } catch (err) {
+    console.error("Error loading spot detail:", err);
+    document.getElementById("spot-review-detail-title").textContent = "No pudimos cargar la cochera";
+  }
+}
+
+function renderSpotReviewDetail(spot) {
+  document.getElementById("spot-review-detail-title").textContent = spot.title;
+  document.getElementById("spot-review-detail-meta").textContent =
+    `${spot.address} · Dueño ${spot.ownerId} · Creada ${fmtSpotDate(spot.createdAt)}`;
+
+  const photos = spot.verificationPhotos || [];
+  const gallery = document.getElementById("spot-review-photos");
+  gallery.innerHTML = "";
+  document.getElementById("spot-review-no-photos").style.display = photos.length === 0 ? "flex" : "none";
+  for (const url of photos) {
+    const img = document.createElement("img");
+    img.src = url;
+    img.alt = "Foto de documentación";
+    img.style.cssText = "width:160px;height:160px;object-fit:cover;border-radius:8px;border:1px solid var(--border)";
+    gallery.appendChild(img);
+  }
+}
+
+async function decideSpotReview(decision) {
+  if (!selectedSpotId) return;
+  const notes = document.getElementById("spot-review-notes").value.trim();
+  if (decision === "rejected" && !notes) {
+    alert("Contale al dueño por qué la rechazás -- cargá un motivo.");
+    return;
+  }
+
+  const approveBtn = document.getElementById("btn-approve-spot");
+  const rejectBtn = document.getElementById("btn-reject-spot");
+  approveBtn.disabled = true;
+  rejectBtn.disabled = true;
+  try {
+    await reviewParkingSpot(adminToken(), selectedSpotId, decision, notes || undefined);
+    document.getElementById("spot-review-detail-card").style.display = "none";
+    selectedSpotId = null;
+    loadPendingSpots();
+  } catch (err) {
+    console.error("Error reviewing spot:", err);
+    alert("No pudimos guardar la decisión. Revisá el token y que parking-service esté corriendo.");
+  } finally {
+    approveBtn.disabled = false;
+    rejectBtn.disabled = false;
+  }
+}
+
+document.getElementById("btn-refresh-spot-review").addEventListener("click", loadPendingSpots);
+document.getElementById("btn-approve-spot").addEventListener("click", () => decideSpotReview("approved"));
+document.getElementById("btn-reject-spot").addEventListener("click", () => decideSpotReview("rejected"));
 
 const TICKET_STATUS_LABELS = { OPEN: "Abierto", IN_PROGRESS: "En curso", RESOLVED: "Resuelto", CLOSED: "Cerrado" };
 const TICKET_STATUS_BADGES = { OPEN: "badge-orange", IN_PROGRESS: "badge-green", RESOLVED: "badge-gray", CLOSED: "badge-red" };
