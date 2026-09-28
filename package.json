@@ -27,7 +27,8 @@
     "start": "expo start --clear --port 8082",
     "android": "expo start --android --clear --port 8082",
     "ios": "expo start --ios --clear --port 8082",
-    "web": "expo start --web --port 8082"
+    "web": "expo start --web --port 8082",
+    "build:web": "expo export -p web && node scripts/fix-cf-pages-assets.js"
   },
   "private": true,
   "overrides": {
