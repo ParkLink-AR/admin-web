@@ -7,12 +7,13 @@ import {
   ScrollView,
   ActivityIndicator,
   Image,
+  Linking,
   Pressable,
   Modal,
   TouchableWithoutFeedback,
   ViewStyle,
 } from 'react-native';
-import * as ImagePicker from 'expo-image-picker';
+import * as DocumentPicker from 'expo-document-picker';
 import { Card } from '@/src/components/Card';
 import { Button } from '@/src/components/Button';
 import { SettlementStatusBadge } from '@/src/components/Badge';
@@ -38,6 +39,13 @@ function formatDate(iso: string) {
 function displayName(u: { firstName: string | null; lastName: string | null; email: string }) {
   const name = [u.firstName, u.lastName].filter(Boolean).join(' ');
   return name || u.email;
+}
+
+// A proof can be a photo of the transfer confirmation or a PDF receipt -- only the former
+// renders as an inline preview image. Checked by extension since that's all a presigned R2
+// URL's query string leaves readable (it's appended after the real path).
+function isImageProof(nameOrUrl: string): boolean {
+  return /\.(jpe?g|png|gif|webp|heic)$/i.test(nameOrUrl.split('?')[0]);
 }
 
 interface SettlementDetailPanelProps {
@@ -113,21 +121,16 @@ export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }
   }, [settlementId]);
 
   async function pickProof() {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      setSubmitError('Se necesita acceso a la galería para adjuntar el comprobante.');
-      return;
-    }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      quality: 0.8,
+    const result = await DocumentPicker.getDocumentAsync({
+      type: ['application/pdf', 'image/*'],
+      copyToCacheDirectory: true,
     });
     if (result.canceled || result.assets.length === 0) return;
     const asset = result.assets[0];
     setProof({
       uri: asset.uri,
-      name: asset.fileName ?? 'comprobante.jpg',
-      type: asset.mimeType ?? 'image/jpeg',
+      name: asset.name ?? 'comprobante',
+      type: asset.mimeType ?? 'application/octet-stream',
     });
   }
 
@@ -239,7 +242,12 @@ export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }
               <DataRow label="Pagado por" value={adminUsernames[settlement.paidByAdminId] ?? settlement.paidByAdminId} />
             ) : null}
             {settlement.proofUrl ? (
-              <Image source={{ uri: settlement.proofUrl }} style={styles.proofImage} resizeMode="contain" />
+              <Button
+                title="Ver comprobante"
+                variant="secondary"
+                onPress={() => Linking.openURL(settlement.proofUrl!)}
+                style={styles.attachBtn}
+              />
             ) : (
               <Text style={styles.hint}>No se adjuntó comprobante.</Text>
             )}
@@ -249,9 +257,15 @@ export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }
             <Card>
               <Text style={styles.sectionTitle}>Confirmar pago</Text>
               <Text style={styles.hint}>
-                Adjuntá una foto del comprobante de la transferencia (opcional) y confirmá que el pago se realizó.
+                Adjuntá el comprobante de la transferencia (foto o PDF, opcional) y confirmá que el pago se realizó.
               </Text>
-              {proof ? <Image source={{ uri: proof.uri }} style={styles.proofImage} resizeMode="contain" /> : null}
+              {proof ? (
+                isImageProof(proof.name) ? (
+                  <Image source={{ uri: proof.uri }} style={styles.proofImage} resizeMode="contain" />
+                ) : (
+                  <Text style={styles.hint}>Archivo adjunto: {proof.name}</Text>
+                )
+              ) : null}
               <Button
                 title={proof ? 'Cambiar comprobante' : 'Adjuntar comprobante'}
                 variant="secondary"
