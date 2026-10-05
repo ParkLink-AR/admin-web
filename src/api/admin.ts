@@ -19,7 +19,9 @@ import {
   Settlement,
   SettlementPayout,
   SettlementStatus,
+  UnverifiedBooking,
   UserStatus,
+  VerificationReviewDecision,
 } from '@/src/types';
 
 // -------------------------
@@ -218,6 +220,56 @@ function toOwnerReceivedBooking(b: OwnerReceivedBookingResponse): OwnerReceivedB
 export async function getOwnerReceivedBookings(ownerId: string): Promise<OwnerReceivedBooking[]> {
   const response = await request<OwnerReceivedBookingResponse[]>(`/admin/owners/${ownerId}/bookings`);
   return response.map(toOwnerReceivedBooking);
+}
+
+// -------------------------
+// Unverified bookings (booking-service, ADMIN, via gateway)
+// -------------------------
+
+interface UnverifiedBookingResponse {
+  id: string;
+  parking_spot_id: string;
+  user_id: string;
+  start: string;
+  end: string;
+  kind: BookingKind;
+  amount: number;
+  owner_amount?: number | null;
+  payment_id?: string | null;
+  paid_at?: string | null;
+  vehicle?: { plate: string } | null;
+}
+
+function toUnverifiedBooking(b: UnverifiedBookingResponse): UnverifiedBooking {
+  return {
+    id: b.id,
+    parkingSpotId: b.parking_spot_id,
+    userId: b.user_id,
+    start: b.start,
+    end: b.end,
+    kind: b.kind,
+    amount: b.amount,
+    ownerAmount: b.owner_amount ?? null,
+    paymentId: b.payment_id ?? null,
+    paidAt: b.paid_at ?? null,
+    vehiclePlate: b.vehicle?.plate ?? null,
+  };
+}
+
+// Paid bookings that completed without their arrival code ever being verified -- the
+// owner's payout for each waits on resolveVerificationReview below.
+export async function listUnverifiedBookings(): Promise<UnverifiedBooking[]> {
+  const response = await request<UnverifiedBookingResponse[]>('/admin/bookings/unverified');
+  return response.map(toUnverifiedBooking);
+}
+
+// APPROVED releases the owner's payout; REFUNDED refunds the driver through Mercado Pago
+// and the owner is never paid for it.
+export async function resolveVerificationReview(bookingId: string, decision: VerificationReviewDecision): Promise<void> {
+  await request(`/admin/bookings/${bookingId}/verification-review`, {
+    method: 'POST',
+    body: JSON.stringify({ decision }),
+  });
 }
 
 // -------------------------

@@ -5,7 +5,6 @@ import {
   AdminAccountRole,
   BookingStatus,
   ParkingSpotStatus,
-  PayoutStatus,
   SettlementStatus,
   UserStatus,
 } from '@/src/types';
@@ -78,18 +77,6 @@ const SPOT_STATUS_COLOR: Record<ParkingSpotStatus, string> = {
 };
 export function SpotStatusBadge({ status }: { status: ParkingSpotStatus }) {
   return <Badge label={SPOT_STATUS_LABEL[status]} color={SPOT_STATUS_COLOR[status]} />;
-}
-
-const PAYOUT_STATUS_LABEL: Record<PayoutStatus, string> = {
-  PENDING: 'PENDIENTE',
-  PAID: 'PAGADO',
-};
-const PAYOUT_STATUS_COLOR: Record<PayoutStatus, string> = {
-  PENDING: colors.warning,
-  PAID: colors.success,
-};
-export function PayoutStatusBadge({ status }: { status: PayoutStatus }) {
-  return <Badge label={PAYOUT_STATUS_LABEL[status]} color={PAYOUT_STATUS_COLOR[status]} />;
 }
 
 const SETTLEMENT_STATUS_LABEL: Record<SettlementStatus, string> = {

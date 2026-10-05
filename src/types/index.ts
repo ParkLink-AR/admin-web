@@ -99,6 +99,25 @@ export interface OwnerReceivedBooking {
   updatedAt: string;
 }
 
+// A paid booking that reached COMPLETED without the owner ever entering the driver's
+// arrival code -- GET /admin/bookings/unverified. Its payout is held back until an admin
+// approves (the owner gets paid) or refunds it (the driver gets their money back).
+export type VerificationReviewDecision = 'APPROVED' | 'REFUNDED';
+
+export interface UnverifiedBooking {
+  id: string;
+  parkingSpotId: string;
+  userId: string;
+  start: string;
+  end: string;
+  kind: BookingKind;
+  amount: number; // centavos, what the driver paid
+  ownerAmount: number | null; // centavos, the owner's own price (before commission)
+  paymentId: string | null;
+  paidAt: string | null;
+  vehiclePlate: string | null;
+}
+
 export type PayoutStatus = 'PENDING' | 'PAID';
 
 export interface Payout {
