@@ -4,19 +4,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/src/store/useSessionStore';
 import { colors } from '@/src/theme/colors';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
+import { sectionsFor } from '@/src/navigation';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
-
-const NAV_ITEMS: { href: string; match: string; label: string; icon: keyof typeof Ionicons.glyphMap; superadminOnly?: boolean }[] = [
-  { href: '/(admin)/home', match: '/home', label: 'Inicio', icon: 'home' },
-  { href: '/(admin)/users', match: '/users', label: 'Buscar usuarios', icon: 'people' },
-  { href: '/(admin)/payouts', match: '/payouts', label: 'Saldos pendientes', icon: 'cash' },
-  { href: '/(admin)/unverified', match: '/unverified', label: 'Sin verificar', icon: 'alert-circle' },
-  { href: '/(admin)/spot-review', match: '/spot-review', label: 'Cocheras nuevas', icon: 'checkmark-done-circle' },
-  { href: '/(admin)/settlements', match: '/settlements', label: 'Liquidaciones', icon: 'receipt' },
-  { href: '/(admin)/accounts', match: '/accounts', label: 'Administradores', icon: 'shield-checkmark', superadminOnly: true },
-  { href: '/(admin)/settings', match: '/settings', label: 'Configuración', icon: 'settings' },
-];
 
 // This is a staff tool used primarily from a PC browser -- unlike mobile's
 // phone-first stack-with-back-button navigation, the admin shell is a
@@ -34,7 +24,7 @@ export default function AdminLayout() {
   if (!hydrated) return null;
   if (!user) return <Redirect href="/(auth)/login" />;
 
-  const navItems = NAV_ITEMS.filter((item) => !item.superadminOnly || user.role === 'SUPERADMIN');
+  const navItems = sectionsFor(user.role);
 
   // Admin sessions have no refresh token to revoke server-side (see
   // src/api/auth.ts) -- logging out is purely a client-side action.

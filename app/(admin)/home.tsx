@@ -1,4 +1,5 @@
-import { View, Text, Pressable, StyleSheet, ViewStyle } from 'react-native';
+import { useEffect, useState } from 'react';
+import { View, Text, Pressable, StyleSheet, ViewStyle, ScrollView, ActivityIndicator } from 'react-native';
 import { router } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Screen } from '@/src/components/Screen';
@@ -6,86 +7,242 @@ import { Card } from '@/src/components/Card';
 import { PageHeader } from '@/src/components/PageHeader';
 import { colors } from '@/src/theme/colors';
 import { useSessionStore } from '@/src/store/useSessionStore';
+import { ADMIN_SECTION_GROUPS, AdminSection, sectionsFor } from '@/src/navigation';
+import {
+  getCommissionSettings,
+  getOwnerPendingBalances,
+  listPendingParkingSpots,
+  listSettlements,
+  listUnverifiedBookings,
+} from '@/src/api/admin';
+import { formatCentavos } from '@/src/services/money';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 
-function Tile({ title, subtitle, icon, onPress }: {
-  title: string;
-  subtitle: string;
+// One loaded figure for the "Para atender ahora" row: undefined while loading, null if
+// its request failed (each one loads on its own, so one failing doesn't blank the rest).
+type Figure<T> = T | null | undefined;
+
+function useFigure<T>(load: () => Promise<T>): Figure<T> {
+  const [value, setValue] = useState<Figure<T>>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    load()
+      .then((v) => !cancelled && setValue(v))
+      .catch(() => !cancelled && setValue(null));
+    return () => {
+      cancelled = true;
+    };
+    // `load` is a module-level API call per figure -- it never changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  return value;
+}
+
+function hoverable(hovered: boolean | undefined) {
+  return [{ cursor: 'pointer' } as unknown as ViewStyle, hovered && styles.hovered];
+}
+
+function PendingTile({ count, label, detail, icon, href }: {
+  count: Figure<number>;
+  label: string;
+  detail?: string;
   icon: keyof typeof Ionicons.glyphMap;
-  onPress: () => void;
+  href: string;
 }) {
+  const pending = typeof count === 'number' && count > 0;
   return (
     <Pressable
-      onPress={onPress}
-      style={({ hovered }: PressableState) => [
-        styles.tileWrap,
-        { cursor: 'pointer' } as unknown as ViewStyle,
-        hovered && styles.tileWrapHovered,
-      ]}
+      onPress={() => router.push(href as never)}
+      style={({ hovered }: PressableState) => [styles.pendingWrap, ...hoverable(hovered)]}
     >
-      <Card style={styles.tile}>
-        <View style={styles.tileIcon}>
-          <Ionicons name={icon} size={22} color={colors.teal} />
+      <Card style={pending ? { ...styles.pendingCard, ...styles.pendingCardActive } : styles.pendingCard}>
+        <View style={styles.pendingTop}>
+          <Ionicons name={icon} size={18} color={pending ? colors.warning : colors.textSecondary} />
+          {count === undefined ? (
+            <ActivityIndicator size="small" color={colors.teal} />
+          ) : (
+            <Text style={[styles.pendingCount, pending && styles.pendingCountActive]}>
+              {count === null ? '—' : count}
+            </Text>
+          )}
         </View>
-        <Text style={styles.tileTitle}>{title}</Text>
-        <Text style={styles.tileSubtitle}>{subtitle}</Text>
+        <Text style={styles.pendingLabel}>{label}</Text>
+        <Text style={[styles.pendingDetail, count === 0 && styles.pendingDetailDone]}>
+          {count === null ? 'No se pudo cargar' : count === 0 ? 'Todo al día' : detail ?? ' '}
+        </Text>
       </Card>
     </Pressable>
   );
 }
 
+function SectionRow({ section }: { section: AdminSection }) {
+  return (
+    <Pressable
+      onPress={() => router.push(section.href as never)}
+      style={({ hovered }: PressableState) => [styles.sectionRow, ...hoverable(hovered)]}
+    >
+      <View style={styles.sectionIcon}>
+        <Ionicons name={section.icon} size={18} color={colors.teal} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.sectionLabel}>{section.label}</Text>
+        <Text style={styles.sectionDescription}>{section.description}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
+    </Pressable>
+  );
+}
+
+function FlowStep({ n, title, body }: { n: number; title: string; body: string }) {
+  return (
+    <View style={styles.step}>
+      <View style={styles.stepNumber}>
+        <Text style={styles.stepNumberText}>{n}</Text>
+      </View>
+      <View style={{ flex: 1, gap: 2 }}>
+        <Text style={styles.stepTitle}>{title}</Text>
+        <Text style={styles.stepBody}>{body}</Text>
+      </View>
+    </View>
+  );
+}
+
 export default function Home() {
   const user = useSessionStore((s) => s.user);
+  const sections = sectionsFor(user?.role).filter((section) => section.group);
+
+  const spotsToReview = useFigure(() => listPendingParkingSpots().then((r) => r.length));
+  const unverified = useFigure(() => listUnverifiedBookings().then((r) => r.length));
+  const balances = useFigure(getOwnerPendingBalances);
+  const draftSettlements = useFigure(() => listSettlements('PENDING').then((r) => r.length));
+  const commission = useFigure(getCommissionSettings);
+
+  const balancesTotal = balances ? balances.reduce((sum, b) => sum + b.pendingNetAmount, 0) : 0;
+  const commissionText = commission ? `${commission.commissionRatePercent}%` : 'la comisión vigente';
 
   return (
     <Screen style={styles.screen}>
-      <View style={styles.body}>
-        <PageHeader title="Inicio" subtitle={`Sesión iniciada como ${user?.username}`} />
+      <ScrollView contentContainerStyle={styles.body}>
+        <PageHeader title={`Hola, ${user?.username ?? ''}`} subtitle="Panel de administración de ParkLink" />
 
-        {/* flexWrap reflows these into columns on a wide window and a single
-            column on a narrow one, without needing a hard breakpoint. */}
-        <View style={styles.tiles}>
-          <Tile
-            title="Buscar usuarios"
-            subtitle="Ver perfil, cocheras y reservas de un usuario"
-            icon="people"
-            onPress={() => router.push('/(admin)/users')}
+        <Card style={styles.intro}>
+          <Text style={styles.introText}>
+            Desde acá el equipo de ParkLink mantiene la plataforma funcionando: revisa las cocheras nuevas antes de
+            que aparezcan en las búsquedas, resuelve las reservas que terminaron sin que el dueño verificara la
+            llegada del conductor y les paga a los dueños lo que ganaron con sus cocheras.
+          </Text>
+        </Card>
+
+        <Text style={styles.heading}>Para atender ahora</Text>
+        <View style={styles.pendingRow}>
+          <PendingTile
+            count={spotsToReview}
+            label="Cocheras por revisar"
+            detail="Esperando aprobación para publicarse"
+            icon="checkmark-done-circle"
+            href="/(admin)/spot-review"
           />
-          <Tile
-            title="Pagos pendientes"
-            subtitle="Liquidar pagos a dueños de cocheras"
+          <PendingTile
+            count={unverified}
+            label="Reservas sin verificar"
+            detail="Con el pago al dueño retenido"
+            icon="alert-circle"
+            href="/(admin)/unverified"
+          />
+          <PendingTile
+            count={balances === undefined || balances === null ? balances : balances.length}
+            label="Dueños con saldo a pagar"
+            detail={balances ? `${formatCentavos(balancesTotal)} en total` : undefined}
             icon="cash"
-            onPress={() => router.push('/(admin)/payouts')}
+            href="/(admin)/payouts"
           />
-          <Tile
-            title="Configuración"
-            subtitle="Porcentaje de comisión de la plataforma"
-            icon="settings"
-            onPress={() => router.push('/(admin)/settings')}
+          <PendingTile
+            count={draftSettlements}
+            label="Liquidaciones sin confirmar"
+            detail="Preparadas, falta la transferencia"
+            icon="receipt"
+            href="/(admin)/settlements"
           />
         </View>
-      </View>
+
+        <Text style={styles.heading}>Cómo se le paga a un dueño</Text>
+        <Card style={styles.flow}>
+          <FlowStep
+            n={1}
+            title="El conductor reserva y paga"
+            body="El pago entra por Mercado Pago y la reserva queda confirmada cuando el dueño la acepta."
+          />
+          <FlowStep
+            n={2}
+            title="El dueño verifica la llegada"
+            body="Carga el código de 4 dígitos del conductor. Si la reserva termina sin código, aparece en Sin verificar y decidís si se le paga."
+          />
+          <FlowStep
+            n={3}
+            title="Se acumula su saldo"
+            body={`Lo que cobró la reserva, menos ${commissionText} de comisión de la plataforma, suma a su saldo en Saldos pendientes.`}
+          />
+          <FlowStep
+            n={4}
+            title="Liquidás y confirmás"
+            body="Preparás la liquidación, hacés la transferencia a su CBU y la confirmás con el comprobante. El dueño la ve en la app."
+          />
+        </Card>
+
+        <Text style={styles.heading}>Secciones</Text>
+        <View style={styles.groups}>
+          {ADMIN_SECTION_GROUPS.map((group) => {
+            const items = sections.filter((section) => section.group === group);
+            if (items.length === 0) return null;
+            return (
+              <Card key={group} style={styles.group}>
+                <Text style={styles.groupTitle}>{group}</Text>
+                {items.map((section) => (
+                  <SectionRow key={section.href} section={section} />
+                ))}
+              </Card>
+            );
+          })}
+        </View>
+      </ScrollView>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
-  body: { padding: 24, maxWidth: 1100, width: '100%', alignSelf: 'center' },
-  tiles: { flexDirection: 'row', flexWrap: 'wrap', gap: 14 },
-  tileWrap: { flexGrow: 1, flexBasis: 260, minWidth: 220, maxWidth: 360, borderRadius: 14 },
-  tileWrapHovered: { transform: [{ translateY: -2 }], shadowColor: colors.deepNavy, shadowOpacity: 0.1, shadowRadius: 10, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
-  tile: { gap: 6 },
-  tileIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    backgroundColor: '#E6F4F4',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 4,
-  },
-  tileTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
-  tileSubtitle: { fontSize: 12, color: colors.textSecondary },
+  body: { padding: 24, gap: 14, maxWidth: 1100, width: '100%', alignSelf: 'center' },
+  hovered: { transform: [{ translateY: -1 }], opacity: 0.92 },
+
+  intro: { borderLeftWidth: 4, borderLeftColor: colors.teal },
+  introText: { fontSize: 14, lineHeight: 22, color: colors.text },
+
+  heading: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 10 },
+
+  pendingRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+  pendingWrap: { flexGrow: 1, flexBasis: 220, minWidth: 200, borderRadius: 14 },
+  pendingCard: { gap: 4, height: '100%' },
+  pendingCardActive: { borderWidth: 1, borderColor: colors.warning },
+  pendingTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', minHeight: 34 },
+  pendingCount: { fontSize: 28, fontWeight: '700', color: colors.textSecondary },
+  pendingCountActive: { color: colors.text },
+  pendingLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
+  pendingDetail: { fontSize: 12, color: colors.textSecondary },
+  pendingDetailDone: { color: colors.success, fontWeight: '600' },
+
+  flow: { gap: 14 },
+  step: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
+  stepNumber: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#E6F4F4', alignItems: 'center', justifyContent: 'center' },
+  stepNumberText: { fontSize: 13, fontWeight: '700', color: colors.teal },
+  stepTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
+  stepBody: { fontSize: 13, lineHeight: 19, color: colors.textSecondary },
+
+  groups: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-start' },
+  group: { flexGrow: 1, flexBasis: 320, minWidth: 260, gap: 2 },
+  groupTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 4 },
+  sectionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderRadius: 8 },
+  sectionIcon: { width: 34, height: 34, borderRadius: 9, backgroundColor: '#E6F4F4', alignItems: 'center', justifyContent: 'center' },
+  sectionLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
+  sectionDescription: { fontSize: 12, color: colors.textSecondary },
 });
