@@ -1,0 +1,28 @@
+{
+  "expo": {
+    "name": "ParkLink - Administrador",
+    "slug": "parklink-admin",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "scheme": "parklink-admin",
+    "web": {
+      "output": "single",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.parklink.admin"
+    },
+    "android": {
+      "package": "com.parklink.admin"
+    },
+    "extra": {
+      "router": {}
+    }
+  }
+}
