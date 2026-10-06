@@ -14,6 +14,7 @@ import {
   OwnerReceivedBooking,
   ParkingSpot,
   ParkingSpotStatus,
+  SpotReviewDecision,
   Payout,
   PayoutStatus,
   Settlement,
@@ -118,6 +119,8 @@ interface ParkingSpotResponse {
   vehicleTypes: string[];
   capacity: number;
   photos: string[];
+  verificationPhotos: string[];
+  reviewNotes: string | null;
   status: ParkingSpotStatus;
   createdAt: string;
   updatedAt: string;
@@ -137,6 +140,22 @@ export async function getUserParkingSpots(userId: string): Promise<ParkingSpot[]
 // gate, just a valid bearer token like every other request this app makes.
 export async function getParkingSpotById(spotId: string): Promise<ParkingSpot> {
   return request<ParkingSpotResponse>(`/parking-spots/${spotId}`);
+}
+
+// Cola de revisión de cocheras nuevas: todas las que siguen en pending_review, las más viejas
+// primero. A diferencia de GET /parking-spots/{id}, esta ruta sí es admin-only (el gateway
+// exige role:admin) y devuelve también verificationPhotos.
+export async function listPendingParkingSpots(): Promise<ParkingSpot[]> {
+  return request<ParkingSpotResponse[]>('/admin/parking-spots');
+}
+
+// Una cochera sólo se puede revisar una vez (un segundo intento da 409). Rechazar necesita
+// motivo: es lo que el dueño ve en la app para saber qué corregir.
+export async function reviewParkingSpot(spotId: string, decision: SpotReviewDecision, notes?: string): Promise<ParkingSpot> {
+  return request<ParkingSpotResponse>(`/admin/parking-spots/${spotId}/review`, {
+    method: 'PATCH',
+    body: JSON.stringify({ decision, ...(notes ? { notes } : {}) }),
+  });
 }
 
 interface DriverBookingResponse {

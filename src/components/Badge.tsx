@@ -66,13 +66,17 @@ export function BookingStatusBadge({ status }: { status: BookingStatus }) {
 }
 
 const SPOT_STATUS_LABEL: Record<ParkingSpotStatus, string> = {
+  pending_review: 'PENDIENTE DE REVISIÓN',
   active: 'ACTIVA',
   paused: 'PAUSADA',
+  rejected: 'RECHAZADA',
   deleted: 'ELIMINADA',
 };
 const SPOT_STATUS_COLOR: Record<ParkingSpotStatus, string> = {
+  pending_review: colors.warning,
   active: colors.success,
   paused: colors.warning,
+  rejected: colors.danger,
   deleted: colors.danger,
 };
 export function SpotStatusBadge({ status }: { status: ParkingSpotStatus }) {

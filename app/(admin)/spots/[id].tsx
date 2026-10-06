@@ -8,6 +8,7 @@ import {
   StyleSheet,
   ActivityIndicator,
   Pressable,
+  Linking,
   ViewStyle,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -131,6 +132,37 @@ export default function SpotDetail() {
             {owner ? <Ionicons name="chevron-forward" size={14} color={colors.teal} /> : null}
           </Pressable>
         </Card>
+
+        {spot.verificationPhotos.length > 0 || spot.reviewNotes || spot.status === 'pending_review' ? (
+          <Card>
+            <Text style={styles.sectionTitle}>Documentación de respaldo</Text>
+            {spot.verificationPhotos.length > 0 ? (
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.gallery}>
+                {spot.verificationPhotos.map((url) => (
+                  <Pressable key={url} onPress={() => Linking.openURL(url)} style={CURSOR_POINTER}>
+                    <Image source={{ uri: url }} style={styles.photo} />
+                  </Pressable>
+                ))}
+              </ScrollView>
+            ) : (
+              <Text style={styles.hint}>El dueño todavía no subió documentación.</Text>
+            )}
+            {spot.reviewNotes ? (
+              <Text style={styles.detailLine}>
+                {spot.status === 'rejected' ? 'Motivo del rechazo' : 'Comentario de la revisión'}: {spot.reviewNotes}
+              </Text>
+            ) : null}
+            {spot.status === 'pending_review' ? (
+              <Pressable
+                onPress={() => router.push('/(admin)/spot-review')}
+                style={({ hovered }: PressableState) => [styles.ownerRow, hovered && styles.ownerRowHovered, CURSOR_POINTER]}
+              >
+                <Text style={styles.ownerText}>Revisar en la cola de cocheras nuevas</Text>
+                <Ionicons name="chevron-forward" size={14} color={colors.teal} />
+              </Pressable>
+            ) : null}
+          </Card>
+        ) : null}
 
         {spot.description ? (
           <Card>

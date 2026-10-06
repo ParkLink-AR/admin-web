@@ -25,7 +25,11 @@ export interface AdminUserDetail extends AdminUserSummary {
   lastLoginAt: string | null;
 }
 
-export type ParkingSpotStatus = 'active' | 'paused' | 'deleted';
+// pending_review / rejected: la cochera recién creada espera la decisión de un admin (ver
+// listPendingParkingSpots / reviewParkingSpot); mientras tanto no aparece en las búsquedas.
+export type ParkingSpotStatus = 'pending_review' | 'active' | 'paused' | 'rejected' | 'deleted';
+
+export type SpotReviewDecision = 'approved' | 'rejected';
 
 export interface ParkingSpot {
   id: string;
@@ -45,6 +49,10 @@ export interface ParkingSpot {
   vehicleTypes: string[];
   capacity: number;
   photos: string[];
+  // Fotos de respaldo que subió el dueño para que un admin verifique la cochera -- no se
+  // muestran al conductor. reviewNotes es el motivo cuando la cochera fue rechazada.
+  verificationPhotos: string[];
+  reviewNotes: string | null;
   status: ParkingSpotStatus;
   createdAt: string;
   updatedAt: string;
