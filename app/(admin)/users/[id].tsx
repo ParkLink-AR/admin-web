@@ -16,6 +16,7 @@ import {
 } from '@/src/api/admin';
 import { AdminUserDetail, ParkingSpot, DriverBooking, OwnerReceivedBooking } from '@/src/types';
 import { ApiError } from '@/src/api/client';
+import { AccountStatusCard } from '@/src/components/AccountStatusCard';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
 
 type Tab = 'spots' | 'made' | 'received';
@@ -161,6 +162,8 @@ export default function UserDetail() {
             )}
           </Card>
         </View>
+
+        <AccountStatusCard user={user} onChange={setUser} />
 
         <View style={styles.tabBar}>
           <TabButton label="Cocheras" active={tab === 'spots'} onPress={() => setTab('spots')} />

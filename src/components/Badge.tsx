@@ -23,11 +23,13 @@ export function Badge({ label, color }: { label: string; color: string }) {
 const USER_STATUS_LABEL: Record<UserStatus, string> = {
   ACTIVE: 'ACTIVO',
   SUSPENDED: 'SUSPENDIDO',
+  PENDING_DELETION: 'ELIMINÁNDOSE',
   DELETED: 'ELIMINADO',
 };
 const USER_STATUS_COLOR: Record<UserStatus, string> = {
   ACTIVE: colors.success,
   SUSPENDED: colors.warning,
+  PENDING_DELETION: colors.danger,
   DELETED: colors.danger,
 };
 export function UserStatusBadge({ status }: { status: UserStatus }) {

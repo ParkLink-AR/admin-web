@@ -1,5 +1,7 @@
 export type AccountType = 'DRIVER' | 'OWNER' | 'BOTH';
-export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'DELETED';
+// PENDING_DELETION: waiting out its deletion grace period (asked for by the user) or, when
+// an admin scheduled it, until ParkLink has paid the owner what it owes them.
+export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'PENDING_DELETION' | 'DELETED';
 
 export interface AdminUserSummary {
   id: string;
@@ -23,6 +25,28 @@ export interface AdminUserDetail extends AdminUserSummary {
   emailVerified: boolean;
   phoneVerified: boolean;
   lastLoginAt: string | null;
+  suspendedAt: string | null;
+  suspendedByAdminId: string | null;
+  suspensionReason: string | null;
+  deletionRequestedAt: string | null;
+  deletionScheduledAt: string | null;
+  // Set when an admin deleted the account at its holder's request (not the user from the app).
+  deletionRequestedByAdminId: string | null;
+  deletionReason: string | null;
+  deletedAt: string | null;
+}
+
+// What suspending or deleting an account would do (GET /admin/users/{id}/closure-summary).
+export interface AccountClosureSummary {
+  blocked: boolean;
+  blockedReason: string | null;
+  inProgressCount: number;
+  driverBookingsToCancel: number;
+  ownerBookingsToCancel: number;
+  ownerRequestsToReject: number;
+  pendingPayoutCount: number;
+  pendingPayoutAmount: number; // centavos
+  spotCount: number;
 }
 
 // pending_review / rejected: la cochera recién creada espera la decisión de un admin (ver

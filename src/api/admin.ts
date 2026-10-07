@@ -1,6 +1,7 @@
 import { Platform } from 'react-native';
 import { request, requestMultipart } from './client';
 import {
+  AccountClosureSummary,
   AccountType,
   AdminAccount,
   AdminAccountRole,
@@ -51,6 +52,14 @@ interface AdminUserDetailResponse extends AdminUserSummaryResponse {
   email_verified: boolean;
   phone_verified: boolean;
   last_login_at: string | null;
+  suspended_at: string | null;
+  suspended_by_admin_id: string | null;
+  suspension_reason: string | null;
+  deletion_requested_at: string | null;
+  deletion_scheduled_at: string | null;
+  deletion_requested_by_admin_id: string | null;
+  deletion_reason: string | null;
+  deleted_at: string | null;
 }
 
 function toAdminUserSummary(u: AdminUserSummaryResponse): AdminUserSummary {
@@ -79,6 +88,14 @@ function toAdminUserDetail(u: AdminUserDetailResponse): AdminUserDetail {
     emailVerified: u.email_verified,
     phoneVerified: u.phone_verified,
     lastLoginAt: u.last_login_at,
+    suspendedAt: u.suspended_at,
+    suspendedByAdminId: u.suspended_by_admin_id,
+    suspensionReason: u.suspension_reason,
+    deletionRequestedAt: u.deletion_requested_at,
+    deletionScheduledAt: u.deletion_scheduled_at,
+    deletionRequestedByAdminId: u.deletion_requested_by_admin_id,
+    deletionReason: u.deletion_reason,
+    deletedAt: u.deleted_at,
   };
 }
 
@@ -93,6 +110,62 @@ export async function searchUsers(query: string): Promise<AdminUserSummary[]> {
 
 export async function getUserDetail(userId: string): Promise<AdminUserDetail> {
   const response = await request<AdminUserDetailResponse>(`/admin/users/${userId}`);
+  return toAdminUserDetail(response);
+}
+
+// -------------------------
+// Account lifecycle: suspension and deletion at the holder's request (auth-service)
+// -------------------------
+
+interface AccountClosureSummaryResponse {
+  blocked: boolean;
+  blocked_reason: string | null;
+  in_progress_count: number;
+  driver_bookings_to_cancel: number;
+  owner_bookings_to_cancel: number;
+  owner_requests_to_reject: number;
+  pending_payout_count: number;
+  pending_payout_amount: number;
+  spot_count: number;
+}
+
+// What suspending or deleting the account would do -- shown before confirming.
+export async function getAccountClosureSummary(userId: string): Promise<AccountClosureSummary> {
+  const r = await request<AccountClosureSummaryResponse>(`/admin/users/${userId}/closure-summary`);
+  return {
+    blocked: r.blocked,
+    blockedReason: r.blocked_reason,
+    inProgressCount: r.in_progress_count,
+    driverBookingsToCancel: r.driver_bookings_to_cancel,
+    ownerBookingsToCancel: r.owner_bookings_to_cancel,
+    ownerRequestsToReject: r.owner_requests_to_reject,
+    pendingPayoutCount: r.pending_payout_count,
+    pendingPayoutAmount: r.pending_payout_amount,
+    spotCount: r.spot_count,
+  };
+}
+
+export async function suspendUser(userId: string, reason: string): Promise<AdminUserDetail> {
+  const response = await request<AdminUserDetailResponse>(`/admin/users/${userId}/suspend`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
+  return toAdminUserDetail(response);
+}
+
+// The only way out of a suspension.
+export async function reactivateUser(userId: string): Promise<AdminUserDetail> {
+  const response = await request<AdminUserDetailResponse>(`/admin/users/${userId}/reactivate`, { method: 'POST' });
+  return toAdminUserDetail(response);
+}
+
+// Deletes the account because its holder asked for it outside the app (by email, etc.):
+// personal data wiped right away, or as soon as ParkLink has paid the owner what it owes.
+export async function deleteUserAtHoldersRequest(userId: string, reason: string): Promise<AdminUserDetail> {
+  const response = await request<AdminUserDetailResponse>(`/admin/users/${userId}/deletion`, {
+    method: 'POST',
+    body: JSON.stringify({ reason }),
+  });
   return toAdminUserDetail(response);
 }
 
