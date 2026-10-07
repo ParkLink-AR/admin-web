@@ -14,6 +14,14 @@ type PressableState = { pressed: boolean; hovered?: boolean };
 // never re-mounts the chrome. Below DESKTOP_BREAKPOINT (a narrow window or
 // an actual phone browser) it collapses into a top bar + horizontal nav so
 // it still works, just not optimized for that width.
+function Footer() {
+  return (
+    <View style={styles.footer}>
+      <Text style={styles.footerText}>© {new Date().getFullYear()} ParkLink. Todos los derechos reservados.</Text>
+    </View>
+  );
+}
+
 export default function AdminLayout() {
   const user = useSessionStore((s) => s.user);
   const hydrated = useSessionStore((s) => s.hydrated);
@@ -79,6 +87,7 @@ export default function AdminLayout() {
         </View>
         <View style={styles.desktopContent}>
           <Slot />
+          <Footer />
         </View>
       </View>
     );
@@ -114,12 +123,15 @@ export default function AdminLayout() {
       </ScrollView>
       <View style={styles.mobileContent}>
         <Slot />
+        <Footer />
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  footer: { paddingVertical: 10, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background, alignItems: 'center' },
+  footerText: { fontSize: 12, color: colors.textSecondary },
   // Desktop: fixed sidebar + flexible content pane, both full viewport height.
   desktopRoot: { flex: 1, flexDirection: 'row', backgroundColor: colors.background },
   sidebar: {

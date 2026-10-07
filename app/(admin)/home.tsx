@@ -9,7 +9,6 @@ import { colors } from '@/src/theme/colors';
 import { useSessionStore } from '@/src/store/useSessionStore';
 import { ADMIN_SECTION_GROUPS, AdminSection, sectionsFor } from '@/src/navigation';
 import {
-  getCommissionSettings,
   getOwnerPendingBalances,
   listPendingParkingSpots,
   listSettlements,
@@ -94,20 +93,6 @@ function SectionRow({ section }: { section: AdminSection }) {
   );
 }
 
-function FlowStep({ n, title, body }: { n: number; title: string; body: string }) {
-  return (
-    <View style={styles.step}>
-      <View style={styles.stepNumber}>
-        <Text style={styles.stepNumberText}>{n}</Text>
-      </View>
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text style={styles.stepTitle}>{title}</Text>
-        <Text style={styles.stepBody}>{body}</Text>
-      </View>
-    </View>
-  );
-}
-
 export default function Home() {
   const user = useSessionStore((s) => s.user);
   const sections = sectionsFor(user?.role).filter((section) => section.group);
@@ -116,10 +101,8 @@ export default function Home() {
   const unverified = useFigure(() => listUnverifiedBookings().then((r) => r.length));
   const balances = useFigure(getOwnerPendingBalances);
   const draftSettlements = useFigure(() => listSettlements('PENDING').then((r) => r.length));
-  const commission = useFigure(getCommissionSettings);
 
   const balancesTotal = balances ? balances.reduce((sum, b) => sum + b.pendingNetAmount, 0) : 0;
-  const commissionText = commission ? `${commission.commissionRatePercent}%` : 'la comisión vigente';
 
   return (
     <Screen style={styles.screen}>
@@ -166,30 +149,6 @@ export default function Home() {
           />
         </View>
 
-        <Text style={styles.heading}>Cómo se le paga a un dueño</Text>
-        <Card style={styles.flow}>
-          <FlowStep
-            n={1}
-            title="El conductor reserva y paga"
-            body="El pago entra por Mercado Pago y la reserva queda confirmada cuando el dueño la acepta."
-          />
-          <FlowStep
-            n={2}
-            title="El dueño verifica la llegada"
-            body="Carga el código de 4 dígitos del conductor. Si la reserva termina sin código, aparece en Sin verificar y decidís si se le paga."
-          />
-          <FlowStep
-            n={3}
-            title="Se acumula su saldo"
-            body={`Lo que cobró la reserva, menos ${commissionText} de comisión de la plataforma, suma a su saldo en Saldos pendientes.`}
-          />
-          <FlowStep
-            n={4}
-            title="Liquidás y confirmás"
-            body="Preparás la liquidación, hacés la transferencia a su CBU y la confirmás con el comprobante. El dueño la ve en la app."
-          />
-        </Card>
-
         <Text style={styles.heading}>Secciones</Text>
         <View style={styles.groups}>
           {ADMIN_SECTION_GROUPS.map((group) => {
@@ -231,12 +190,6 @@ const styles = StyleSheet.create({
   pendingDetail: { fontSize: 12, color: colors.textSecondary },
   pendingDetailDone: { color: colors.success, fontWeight: '600' },
 
-  flow: { gap: 14 },
-  step: { flexDirection: 'row', gap: 12, alignItems: 'flex-start' },
-  stepNumber: { width: 26, height: 26, borderRadius: 13, backgroundColor: '#E6F4F4', alignItems: 'center', justifyContent: 'center' },
-  stepNumberText: { fontSize: 13, fontWeight: '700', color: colors.teal },
-  stepTitle: { fontSize: 14, fontWeight: '600', color: colors.text },
-  stepBody: { fontSize: 13, lineHeight: 19, color: colors.textSecondary },
 
   groups: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-start' },
   group: { flexGrow: 1, flexBasis: 320, minWidth: 260, gap: 2 },
