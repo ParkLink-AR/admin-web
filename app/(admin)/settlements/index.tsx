@@ -11,12 +11,13 @@ import { listSettlements } from '@/src/api/admin';
 import { Settlement, SettlementStatus } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
+import { formatShortDate } from '@/src/services/dates';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return formatShortDate(iso);
 }
 
 // "Liquidaciones" -- the confirm/pay queue for batched Settlements, one tap deeper than

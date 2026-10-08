@@ -13,6 +13,7 @@ import {
 } from '@/src/api/admin';
 import { ApiError } from '@/src/api/client';
 import { AccountClosureSummary, AdminUserDetail } from '@/src/types';
+import { formatLongDateTime } from '@/src/services/dates';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 type Action = 'suspend' | 'reactivate' | 'delete';
@@ -45,7 +46,7 @@ const ACTION_COPY: Record<Action, { title: string; body: string; confirm: string
 };
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  return formatLongDateTime(iso);
 }
 
 function consequences(summary: AccountClosureSummary): string[] {

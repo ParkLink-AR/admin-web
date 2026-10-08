@@ -1,47 +1,46 @@
 import { useCallback, useState } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  Pressable,
-  StyleSheet,
-  ActivityIndicator,
-  Modal,
-  TouchableWithoutFeedback,
-  ViewStyle,
-} from 'react-native';
-import { useFocusEffect } from 'expo-router';
+import { View, Text, FlatList, Pressable, StyleSheet, ActivityIndicator, ViewStyle } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { router, useFocusEffect } from 'expo-router';
 import { Screen } from '@/src/components/Screen';
 import { PageHeader } from '@/src/components/PageHeader';
 import { Card } from '@/src/components/Card';
 import { Button } from '@/src/components/Button';
+import { PartyContact } from '@/src/components/PartyContact';
+import { PendingVerificationDecision, VerificationDecisionModal } from '@/src/components/VerificationDecisionModal';
 import { colors } from '@/src/theme/colors';
 import { formatCentavos } from '@/src/services/money';
-import { getParkingSpotById, getUserDetail, listUnverifiedBookings, resolveVerificationReview } from '@/src/api/admin';
-import { AdminUserDetail, UnverifiedBooking, VerificationReviewDecision } from '@/src/types';
+import { getParkingSpotById, getUserDetail, listUnverifiedBookings } from '@/src/api/admin';
+import { AdminUserDetail, ParkingSpot, UnverifiedBooking } from '@/src/types';
 import { ApiError } from '@/src/api/client';
+import { formatShortDateTime } from '@/src/services/dates';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
 
-interface PendingDecision {
-  booking: UnverifiedBooking;
-  decision: VerificationReviewDecision;
-}
-
-function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
+/** Opens the booking's full detail page (cochera, both sides, payment) -- the same page the
+ * user pages link to, told it's one still waiting for this review. */
+function openUnverifiedBooking(item: UnverifiedBooking) {
+  router.push({
+    pathname: '/(admin)/bookings/[id]',
+    params: {
+      id: item.id,
+      parkingSpotId: item.parkingSpotId,
+      userId: item.userId,
+      start: item.start,
+      end: item.end,
+      status: 'COMPLETED',
+      amount: String(item.amount),
+      ownerAmount: item.ownerAmount != null ? String(item.ownerAmount) : '',
+      paymentId: item.paymentId ?? '',
+      paidAt: item.paidAt ?? '',
+      cancellationReason: '',
+      kind: item.kind,
+      updatedAt: '',
+      vehiclePlate: item.vehiclePlate ?? '',
+      verificationReview: 'PENDING',
+    },
   });
-}
-
-function displayName(u: AdminUserDetail) {
-  const name = [u.firstName, u.lastName].filter(Boolean).join(' ');
-  return name || u.email;
 }
 
 // "Sin verificar" -- paid bookings that completed without the owner ever entering the
@@ -50,49 +49,37 @@ function displayName(u: AdminUserDetail) {
 // gets paid in the next settlement) or refund the driver (the owner is never paid for it).
 export default function UnverifiedBookings() {
   const [bookings, setBookings] = useState<UnverifiedBooking[]>([]);
-  const [driverNames, setDriverNames] = useState<Record<string, string>>({});
-  const [spotNames, setSpotNames] = useState<Record<string, { title: string; ownerName?: string }>>({});
+  const [users, setUsers] = useState<Record<string, AdminUserDetail>>({});
+  const [spots, setSpots] = useState<Record<string, ParkingSpot>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pending, setPending] = useState<PendingDecision | null>(null);
-  const [resolving, setResolving] = useState(false);
-  const [resolveError, setResolveError] = useState<string | null>(null);
+  const [pending, setPending] = useState<PendingVerificationDecision | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
       const rows = await listUnverifiedBookings();
-      setBookings(rows);
 
-      // Best-effort display names -- a failed lookup just falls back to the raw id.
-      const driverIds = [...new Set(rows.map((r) => r.userId))];
+      // Best-effort: a spot or person that fails to load just shows its id.
       const spotIds = [...new Set(rows.map((r) => r.parkingSpotId))];
-      const [drivers, spots] = await Promise.all([
-        Promise.allSettled(driverIds.map((id) => getUserDetail(id))),
-        Promise.allSettled(spotIds.map((id) => getParkingSpotById(id))),
-      ]);
-      const resolvedDrivers: Record<string, string> = {};
-      drivers.forEach((result, i) => {
-        if (result.status === 'fulfilled') resolvedDrivers[driverIds[i]] = displayName(result.value);
+      const spotResults = await Promise.allSettled(spotIds.map((id) => getParkingSpotById(id)));
+      const loadedSpots: Record<string, ParkingSpot> = {};
+      spotResults.forEach((result, i) => {
+        if (result.status === 'fulfilled') loadedSpots[spotIds[i]] = result.value;
       });
-      setDriverNames(resolvedDrivers);
+      setSpots(loadedSpots);
 
-      const resolvedSpots: Record<string, { title: string; ownerName?: string }> = {};
-      await Promise.all(
-        spots.map(async (result, i) => {
-          if (result.status !== 'fulfilled') return;
-          const spot = result.value;
-          let ownerName: string | undefined;
-          try {
-            ownerName = displayName(await getUserDetail(spot.ownerId));
-          } catch {
-            // Owner name is optional context, not required to decide.
-          }
-          resolvedSpots[spotIds[i]] = { title: spot.title, ownerName };
-        }),
-      );
-      setSpotNames(resolvedSpots);
+      const userIds = [...new Set([...rows.map((r) => r.userId), ...Object.values(loadedSpots).map((s) => s.ownerId)])];
+      const userResults = await Promise.allSettled(userIds.map((id) => getUserDetail(id)));
+      const loadedUsers: Record<string, AdminUserDetail> = {};
+      userResults.forEach((result, i) => {
+        if (result.status === 'fulfilled') loadedUsers[userIds[i]] = result.value;
+      });
+      setUsers(loadedUsers);
+      // Shown only once the spot and both people are in, so a card never reads "couldn't
+      // load" for someone who's still loading.
+      setBookings(rows);
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : 'No se pudieron cargar las reservas sin verificar.');
     } finally {
@@ -106,26 +93,6 @@ export default function UnverifiedBookings() {
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [])
   );
-
-  function askDecision(booking: UnverifiedBooking, decision: VerificationReviewDecision) {
-    setResolveError(null);
-    setPending({ booking, decision });
-  }
-
-  async function confirmDecision() {
-    if (!pending) return;
-    setResolving(true);
-    setResolveError(null);
-    try {
-      await resolveVerificationReview(pending.booking.id, pending.decision);
-      setPending(null);
-      setBookings((prev) => prev.filter((b) => b.id !== pending.booking.id));
-    } catch (err) {
-      setResolveError(err instanceof ApiError ? err.detail : 'No se pudo guardar la decisión. Intentá de nuevo.');
-    } finally {
-      setResolving(false);
-    }
-  }
 
   return (
     <Screen style={styles.screen}>
@@ -146,25 +113,50 @@ export default function UnverifiedBookings() {
           keyExtractor={(b) => b.id}
           contentContainerStyle={styles.list}
           renderItem={({ item }) => {
-            const spot = spotNames[item.parkingSpotId];
+            const spot = spots[item.parkingSpotId];
             return (
               <Card style={styles.card}>
                 <View style={styles.cardHeader}>
-                  <Text style={styles.cardTitle} numberOfLines={1}>{spot?.title ?? item.parkingSpotId}</Text>
+                  <Pressable
+                    onPress={() => spot && router.push(`/(admin)/spots/${spot.id}`)}
+                    disabled={!spot}
+                    style={({ hovered }: PressableState) => [styles.spotLink, hovered && styles.hovered, spot && CURSOR_POINTER]}
+                    accessibilityRole="link"
+                  >
+                    <Text style={styles.cardTitle} numberOfLines={1}>{spot?.title ?? item.parkingSpotId}</Text>
+                    {spot ? <Ionicons name="chevron-forward" size={14} color={colors.teal} /> : null}
+                  </Pressable>
                   <Text style={styles.amount}>{formatCentavos(item.amount)}</Text>
                 </View>
+                {spot ? <Text style={styles.caption}>{spot.address}</Text> : null}
                 <Text style={styles.caption}>
-                  {formatDate(item.start)} → {formatDate(item.end)} · {item.kind === 'HOURLY' ? 'Por hora' : 'Estadía'}
+                  {formatShortDateTime(item.start)} → {formatShortDateTime(item.end)} · {item.kind === 'HOURLY' ? 'Por hora' : 'Estadía'}
+                  {item.vehiclePlate ? ` · Patente ${item.vehiclePlate}` : ''}
+                  {item.ownerAmount != null ? ` · Al dueño: ${formatCentavos(item.ownerAmount)}` : ''}
                 </Text>
-                <Text style={styles.caption}>Conductor: {driverNames[item.userId] ?? item.userId}</Text>
-                <Text style={styles.caption}>Dueño: {spot?.ownerName ?? '—'}</Text>
-                {item.vehiclePlate ? <Text style={styles.caption}>Patente: {item.vehiclePlate}</Text> : null}
-                {item.ownerAmount != null ? (
-                  <Text style={styles.caption}>Le corresponde al dueño: {formatCentavos(item.ownerAmount)}</Text>
-                ) : null}
+
+                <View style={styles.parties}>
+                  <PartyContact label="Conductor" user={users[item.userId] ?? null} fallbackId={item.userId} compact />
+                  <PartyContact
+                    label="Propietario"
+                    user={spot ? users[spot.ownerId] ?? null : null}
+                    fallbackId={spot?.ownerId}
+                    compact
+                  />
+                </View>
+
                 <View style={styles.actions}>
-                  <Button title="Reembolsar al conductor" variant="danger" onPress={() => askDecision(item, 'REFUNDED')} />
-                  <Button title="Aprobar pago al dueño" onPress={() => askDecision(item, 'APPROVED')} />
+                  <Button title="Ver reserva" variant="secondary" onPress={() => openUnverifiedBooking(item)} />
+                  <View style={styles.actionsSpacer} />
+                  <Button
+                    title="Reembolsar al conductor"
+                    variant="danger"
+                    onPress={() => setPending({ bookingId: item.id, amount: item.amount, decision: 'REFUNDED' })}
+                  />
+                  <Button
+                    title="Aprobar pago al dueño"
+                    onPress={() => setPending({ bookingId: item.id, amount: item.amount, decision: 'APPROVED' })}
+                  />
                 </View>
               </Card>
             );
@@ -172,40 +164,14 @@ export default function UnverifiedBookings() {
         />
       </View>
 
-      <Modal visible={pending !== null} transparent animationType="fade" onRequestClose={() => setPending(null)}>
-        <TouchableWithoutFeedback onPress={() => !resolving && setPending(null)}>
-          <View style={styles.modalOverlay}>
-            <TouchableWithoutFeedback>
-              <View style={styles.modalSheet}>
-                <Text style={styles.modalTitle}>
-                  {pending?.decision === 'REFUNDED' ? 'Reembolsar al conductor' : 'Aprobar pago al dueño'}
-                </Text>
-                <Text style={styles.modalBody}>
-                  {pending?.decision === 'REFUNDED'
-                    ? `Se le devuelven ${pending ? formatCentavos(pending.booking.amount) : ''} al conductor por Mercado Pago y el dueño no cobra esta reserva. No se puede deshacer.`
-                    : 'La reserva se da por cumplida y el pago al dueño entra en su próxima liquidación. No se puede deshacer.'}
-                </Text>
-                {resolveError ? <Text style={styles.error}>{resolveError}</Text> : null}
-                <View style={styles.modalActions}>
-                  <Pressable
-                    style={({ hovered }: PressableState) => [styles.modalCancelBtn, hovered && styles.modalCancelBtnHovered, CURSOR_POINTER]}
-                    onPress={() => setPending(null)}
-                    disabled={resolving}
-                  >
-                    <Text style={styles.modalCancelBtnText}>Cancelar</Text>
-                  </Pressable>
-                  <Button
-                    title="Confirmar"
-                    variant={pending?.decision === 'REFUNDED' ? 'danger' : 'primary'}
-                    onPress={confirmDecision}
-                    loading={resolving}
-                  />
-                </View>
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
+      <VerificationDecisionModal
+        pending={pending}
+        onClose={() => setPending(null)}
+        onResolved={(bookingId) => {
+          setPending(null);
+          setBookings((prev) => prev.filter((b) => b.id !== bookingId));
+        }}
+      />
     </Screen>
   );
 }
@@ -220,17 +186,15 @@ const styles = StyleSheet.create({
   list: { paddingVertical: 12, gap: 12 },
   card: { gap: 4 },
   cardHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
-  cardTitle: { flex: 1, fontSize: 16, fontWeight: '700', color: colors.text },
+  spotLink: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2, paddingHorizontal: 4, marginHorizontal: -4, borderRadius: 6 },
+  hovered: { backgroundColor: colors.background },
+  cardTitle: { flexShrink: 1, fontSize: 16, fontWeight: '700', color: colors.text },
   amount: { fontSize: 16, fontWeight: '700', color: colors.text },
   caption: { fontSize: 13, color: colors.textSecondary },
-  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 12, justifyContent: 'flex-end' },
-
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(4, 35, 71, 0.5)', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  modalSheet: { backgroundColor: colors.surface, borderRadius: 16, padding: 20, width: '100%', maxWidth: 420, gap: 8 },
-  modalTitle: { fontSize: 17, fontWeight: '700', color: colors.text },
-  modalBody: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
-  modalActions: { flexDirection: 'row', gap: 10, marginTop: 14, justifyContent: 'flex-end', alignItems: 'center' },
-  modalCancelBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8 },
-  modalCancelBtnHovered: { backgroundColor: colors.background },
-  modalCancelBtnText: { color: colors.textSecondary, fontWeight: '600' },
+  parties: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginTop: 10, paddingTop: 10,
+    borderTopWidth: 1, borderTopColor: colors.border,
+  },
+  actions: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginTop: 14, alignItems: 'center' },
+  actionsSpacer: { flex: 1 },
 });

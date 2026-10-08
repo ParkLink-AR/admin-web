@@ -20,18 +20,13 @@ import { colors } from '@/src/theme/colors';
 import { getParkingSpotById, getUserDetail } from '@/src/api/admin';
 import { AdminUserDetail, ParkingSpot } from '@/src/types';
 import { ApiError } from '@/src/api/client';
+import { formatShortDateTime } from '@/src/services/dates';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatShortDateTime(iso);
 }
 
 function ownerDisplayName(u: AdminUserDetail) {

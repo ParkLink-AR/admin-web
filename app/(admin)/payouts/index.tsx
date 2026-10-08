@@ -10,12 +10,13 @@ import { getOwnerPendingBalances, getUserDetail } from '@/src/api/admin';
 import { OwnerPendingBalance } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
+import { formatShortDate } from '@/src/services/dates';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return formatShortDate(iso);
 }
 
 // "Saldos pendientes" -- the new starting screen for "who do I owe money to", now that

@@ -22,22 +22,17 @@ import { AdminAccount, AdminAccountRole } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
 import { useSessionStore } from '@/src/store/useSessionStore';
+import { formatShortDate, formatShortDateTime } from '@/src/services/dates';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
 
 function formatDate(iso: string) {
-  return new Date(iso).toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  return formatShortDate(iso);
 }
 
 function formatDateTime(iso: string) {
-  return new Date(iso).toLocaleDateString('es-AR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
+  return formatShortDateTime(iso);
 }
 
 // "Administradores" -- CRUD over the admin identity system itself
