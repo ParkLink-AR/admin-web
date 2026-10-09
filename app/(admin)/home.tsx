@@ -9,6 +9,7 @@ import { colors } from '@/src/theme/colors';
 import { useSessionStore } from '@/src/store/useSessionStore';
 import { ADMIN_SECTION_GROUPS, AdminSection, sectionsFor } from '@/src/navigation';
 import {
+  countFailedRefunds,
   getOwnerPendingBalances,
   listPendingParkingSpots,
   listSettlements,
@@ -101,6 +102,7 @@ export default function Home() {
   const unverified = useFigure(() => listUnverifiedBookings().then((r) => r.length));
   const balances = useFigure(getOwnerPendingBalances);
   const draftSettlements = useFigure(() => listSettlements('PENDING').then((r) => r.length));
+  const failedRefunds = useFigure(countFailedRefunds);
 
   const balancesTotal = balances ? balances.reduce((sum, b) => sum + b.pendingNetAmount, 0) : 0;
 
@@ -139,6 +141,13 @@ export default function Home() {
             detail={balances ? `${formatCentavos(balancesTotal)} en total` : undefined}
             icon="cash"
             href="/(admin)/payouts"
+          />
+          <PendingTile
+            count={failedRefunds}
+            label="Reembolsos pendientes"
+            detail="Mercado Pago no los pudo hacer"
+            icon="arrow-undo-circle"
+            href="/(admin)/refunds"
           />
           <PendingTile
             count={draftSettlements}

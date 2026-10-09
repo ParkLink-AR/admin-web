@@ -150,6 +150,42 @@ export interface UnverifiedBooking {
   vehiclePlate: string | null;
 }
 
+// Why Mercado Pago refused a refund (payment-service's describeRefundError): a payment by
+// one of Mercado Pago's test users (never refundable through the API), a payment it
+// doesn't know, an access token that can't refund it, or a passing failure that the
+// automatic retries may still fix.
+export type RefundErrorCode = 'test_payment' | 'payment_not_found' | 'unauthorized' | 'transient';
+
+// A refund still owed to a driver after Mercado Pago failed it -- GET /admin/refunds.
+export interface FailedRefund {
+  paymentId: string;
+  bookingId: string | null;
+  amount: number; // pesos, what the driver paid
+  payerEmail: string | null;
+  approvedAt: string | null;
+  attempts: number;
+  /** The automatic retries gave up (or the failure can never be fixed by retrying). */
+  retriesExhausted: boolean;
+  errorCode: RefundErrorCode | null;
+  lastError: string | null;
+  failedAt: string;
+  /** The booking it paid for -- null if it couldn't be loaded. */
+  booking: {
+    id: string;
+    userId: string;
+    parkingSpotId: string;
+    status: BookingStatus;
+    kind: BookingKind;
+    start: string;
+    end: string;
+    amount: number; // centavos
+    cancellationReason: string | null;
+  } | null;
+}
+
+/** How an admin closes a failed refund by hand. */
+export type RefundResolution = 'refunded_manually' | 'discarded';
+
 export type PayoutStatus = 'PENDING' | 'PAID';
 
 export interface Payout {

@@ -1,10 +1,12 @@
+import { useEffect, useState } from 'react';
 import { Redirect, Slot, router, usePathname } from 'expo-router';
 import { View, Text, Image, Pressable, StyleSheet, ScrollView, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSessionStore } from '@/src/store/useSessionStore';
 import { colors } from '@/src/theme/colors';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
-import { sectionsFor } from '@/src/navigation';
+import { AdminSection, sectionsFor } from '@/src/navigation';
+import { countFailedRefunds } from '@/src/api/admin';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 
@@ -22,12 +24,40 @@ function Footer() {
   );
 }
 
+// How many items wait in the sections that show a count in the menu -- reloaded on every
+// navigation, so resolving one and moving on updates it. Best effort: a failed load just
+// shows no count.
+function usePendingCounts(enabled: boolean, pathname: string): Partial<Record<NonNullable<AdminSection['pendingCount']>, number>> {
+  const [refunds, setRefunds] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!enabled) return;
+    let cancelled = false;
+    countFailedRefunds()
+      .then((count) => !cancelled && setRefunds(count))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [enabled, pathname]);
+  return { refunds };
+}
+
+function CountPill({ count, active }: { count: number | undefined; active: boolean }) {
+  if (!count) return null;
+  return (
+    <View style={[styles.countPill, active && styles.countPillActive]}>
+      <Text style={[styles.countPillText, active && styles.countPillTextActive]}>{count}</Text>
+    </View>
+  );
+}
+
 export default function AdminLayout() {
   const user = useSessionStore((s) => s.user);
   const hydrated = useSessionStore((s) => s.hydrated);
   const clearSession = useSessionStore((s) => s.clearSession);
   const pathname = usePathname();
   const isDesktop = useIsDesktop();
+  const pendingCounts = usePendingCounts(!!user, pathname);
 
   if (!hydrated) return null;
   if (!user) return <Redirect href="/(auth)/login" />;
@@ -69,6 +99,7 @@ export default function AdminLayout() {
                 >
                   <Ionicons name={item.icon} size={18} color={active ? colors.white : colors.textSecondary} />
                   <Text style={[styles.sidebarItemText, active && styles.sidebarItemTextActive]}>{item.label}</Text>
+                  {item.pendingCount ? <CountPill count={pendingCounts[item.pendingCount]} active={active} /> : null}
                 </Pressable>
               );
             })}
@@ -117,6 +148,7 @@ export default function AdminLayout() {
             >
               <Ionicons name={item.icon} size={15} color={active ? colors.white : colors.textSecondary} />
               <Text style={[styles.mobileNavItemText, active && styles.mobileNavItemTextActive]}>{item.label}</Text>
+              {item.pendingCount ? <CountPill count={pendingCounts[item.pendingCount]} active={active} /> : null}
             </Pressable>
           );
         })}
@@ -130,6 +162,10 @@ export default function AdminLayout() {
 }
 
 const styles = StyleSheet.create({
+  countPill: { marginLeft: 'auto', minWidth: 20, paddingHorizontal: 6, paddingVertical: 1, borderRadius: 10, backgroundColor: colors.warning, alignItems: 'center' },
+  countPillActive: { backgroundColor: colors.white },
+  countPillText: { fontSize: 11, fontWeight: '700', color: colors.white },
+  countPillTextActive: { color: colors.deepNavy },
   footer: { paddingVertical: 10, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: colors.border, backgroundColor: colors.background, alignItems: 'center' },
   footerText: { fontSize: 12, color: colors.textSecondary },
   // Desktop: fixed sidebar + flexible content pane, both full viewport height.

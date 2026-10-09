@@ -11,10 +11,13 @@ import {
   BookingStatus,
   CommissionSettings,
   DriverBooking,
+  FailedRefund,
   OwnerPendingBalance,
   OwnerReceivedBooking,
   ParkingSpot,
   ParkingSpotStatus,
+  RefundErrorCode,
+  RefundResolution,
   SpotReviewDecision,
   Payout,
   PayoutStatus,
@@ -361,6 +364,81 @@ export async function resolveVerificationReview(bookingId: string, decision: Ver
   await request(`/admin/bookings/${bookingId}/verification-review`, {
     method: 'POST',
     body: JSON.stringify({ decision }),
+  });
+}
+
+// -------------------------
+// Failed refunds (payment-service, ADMIN, via gateway)
+//
+// Refunds Mercado Pago refused when a paid booking was called off. payment-service keeps
+// retrying the passing failures on its own; these are what's still owed, until an admin
+// retries it, marks it as returned some other way, or discards it (e.g. test data).
+// -------------------------
+
+interface FailedRefundResponse {
+  paymentId: string;
+  bookingId: string | null;
+  amount: number;
+  payerEmail: string | null;
+  approvedAt: string | null;
+  attempts: number;
+  retriesExhausted: boolean;
+  errorCode: RefundErrorCode | null;
+  lastError: string | null;
+  failedAt: string;
+  booking: {
+    id: string;
+    user_id: string;
+    parking_spot_id?: string;
+    status: BookingStatus;
+    kind?: BookingKind;
+    start?: string;
+    end?: string;
+    amount: number;
+    cancellation_reason?: string | null;
+  } | null;
+}
+
+function toFailedRefund(r: FailedRefundResponse): FailedRefund {
+  const b = r.booking;
+  return {
+    ...r,
+    booking: b && b.parking_spot_id && b.start && b.end
+      ? {
+          id: b.id,
+          userId: b.user_id,
+          parkingSpotId: b.parking_spot_id,
+          status: b.status,
+          kind: b.kind ?? 'HOURLY',
+          start: b.start,
+          end: b.end,
+          amount: b.amount,
+          cancellationReason: b.cancellation_reason ?? null,
+        }
+      : null,
+  };
+}
+
+export async function listFailedRefunds(): Promise<FailedRefund[]> {
+  const response = await request<{ items: FailedRefundResponse[] }>('/admin/refunds');
+  return response.items.map(toFailedRefund);
+}
+
+export async function countFailedRefunds(): Promise<number> {
+  const response = await request<{ count: number }>('/admin/refunds/count');
+  return response.count;
+}
+
+/** Asks Mercado Pago for the refund again, right now. Throws (ApiError) if it fails again. */
+export async function retryFailedRefund(paymentId: string): Promise<void> {
+  await request(`/admin/refunds/${encodeURIComponent(paymentId)}/retry`, { method: 'POST' });
+}
+
+/** Closes a failed refund by hand. `note` is required to discard one. */
+export async function resolveFailedRefund(paymentId: string, resolution: RefundResolution, note: string): Promise<void> {
+  await request(`/admin/refunds/${encodeURIComponent(paymentId)}/resolve`, {
+    method: 'POST',
+    body: JSON.stringify({ resolution, note }),
   });
 }
 
