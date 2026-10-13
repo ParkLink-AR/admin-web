@@ -6,6 +6,7 @@ import {
   BookingStatus,
   ParkingSpotStatus,
   SettlementStatus,
+  TicketStatus,
   UserStatus,
 } from '@/src/types';
 
@@ -128,3 +129,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
 });
+
+const TICKET_STATUS_LABEL: Record<TicketStatus, string> = {
+  OPEN: 'ABIERTO',
+  IN_PROGRESS: 'EN CURSO',
+  RESOLVED: 'RESUELTO',
+  CLOSED: 'CERRADO',
+};
+const TICKET_STATUS_COLOR: Record<TicketStatus, string> = {
+  OPEN: colors.warning,
+  IN_PROGRESS: colors.teal,
+  RESOLVED: colors.success,
+  CLOSED: colors.textSecondary,
+};
+export function TicketStatusBadge({ status }: { status: TicketStatus }) {
+  return <Badge label={TICKET_STATUS_LABEL[status]} color={TICKET_STATUS_COLOR[status]} />;
+}

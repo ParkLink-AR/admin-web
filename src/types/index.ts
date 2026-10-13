@@ -266,3 +266,67 @@ export interface AdminAccount {
   createdAt: string;
   lastLoginAt: string | null;
 }
+
+// ---------------------------------------------------------------------------
+// Support tickets (booking-service, /admin/tickets)
+// ---------------------------------------------------------------------------
+
+export type TicketStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED' | 'CLOSED';
+/** Which side of the booking opened the ticket. */
+export type TicketCreatorRole = 'driver' | 'owner';
+
+/** A ticket as the support list shows it. */
+export interface SupportTicketSummary {
+  id: string;
+  bookingId: string;
+  createdBy: string;
+  subject: string;
+  status: TicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  creatorRole: TicketCreatorRole;
+  lastMessageAt: string | null;
+  lastMessageFrom: 'user' | 'staff';
+  /** Open or in progress, and the user wrote last. */
+  awaitingReply: boolean;
+  booking: {
+    parkingSpotId: string;
+    driverId: string;
+    start: string;
+    end: string;
+    status: BookingStatus;
+    kind: BookingKind;
+  };
+}
+
+/** One ticket with the booking it's about, for its detail page. */
+export interface SupportTicketDetail {
+  id: string;
+  bookingId: string;
+  createdBy: string;
+  subject: string;
+  status: TicketStatus;
+  createdAt: string;
+  updatedAt: string;
+  creatorRole: TicketCreatorRole;
+  parkingSpotId: string;
+  parkingSpotTitle: string;
+  driverId: string;
+  ownerId: string;
+  bookingStart: string;
+  bookingEnd: string;
+  bookingStatus: BookingStatus;
+  bookingKind: BookingKind;
+  /** Centavos. */
+  bookingAmount: number;
+  paymentId: string | null;
+}
+
+export interface SupportTicketMessage {
+  id: string;
+  senderId: string;
+  /** Sent by ParkLink staff (from this panel). */
+  isAdmin: boolean;
+  body: string;
+  createdAt: string;
+}

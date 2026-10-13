@@ -24,6 +24,11 @@ import {
   Settlement,
   SettlementPayout,
   SettlementStatus,
+  SupportTicketDetail,
+  SupportTicketMessage,
+  SupportTicketSummary,
+  TicketCreatorRole,
+  TicketStatus,
   UnverifiedBooking,
   UserStatus,
   VerificationReviewDecision,
@@ -722,4 +727,145 @@ export async function setAdminAccountPassword(id: string, newPassword: string): 
     body: JSON.stringify({ new_password: newPassword }),
   });
   return toAdminAccount(response);
+}
+
+// ---------------------------------------------------------------------------
+// Support tickets (booking-service, ADMIN, via gateway)
+// ---------------------------------------------------------------------------
+// Tickets drivers and owners open from a booking in the app. Staff reply here; the user
+// gets a push and sees the reply in the app.
+
+interface TicketSummaryResponse {
+  id: string;
+  booking_id: string;
+  created_by: string;
+  subject: string;
+  status: TicketStatus;
+  created_at: string;
+  updated_at: string;
+  creator_role: TicketCreatorRole;
+  last_message_at?: string;
+  last_message_from: 'user' | 'staff';
+  awaiting_reply: boolean;
+  booking: {
+    parking_spot_id: string;
+    driver_id: string;
+    start: string;
+    end: string;
+    status: BookingStatus;
+    kind: BookingKind;
+  };
+}
+
+function toTicketSummary(t: TicketSummaryResponse): SupportTicketSummary {
+  return {
+    id: t.id,
+    bookingId: t.booking_id,
+    createdBy: t.created_by,
+    subject: t.subject,
+    status: t.status,
+    createdAt: t.created_at,
+    updatedAt: t.updated_at,
+    creatorRole: t.creator_role,
+    lastMessageAt: t.last_message_at ?? null,
+    lastMessageFrom: t.last_message_from,
+    awaitingReply: t.awaiting_reply,
+    booking: {
+      parkingSpotId: t.booking.parking_spot_id,
+      driverId: t.booking.driver_id,
+      start: t.booking.start,
+      end: t.booking.end,
+      status: t.booking.status,
+      kind: t.booking.kind,
+    },
+  };
+}
+
+export async function listSupportTickets(status?: TicketStatus): Promise<SupportTicketSummary[]> {
+  const rows = await request<TicketSummaryResponse[]>(`/admin/tickets${status ? `?status=${status}` : ''}`);
+  return rows.map(toTicketSummary);
+}
+
+/** How many tickets wait on a reply from ParkLink -- the menu's count. */
+export async function countTicketsAwaitingReply(): Promise<number> {
+  const rows = await listSupportTickets();
+  return rows.filter((t) => t.awaitingReply).length;
+}
+
+interface TicketDetailResponse {
+  id: string;
+  booking_id: string;
+  created_by: string;
+  subject: string;
+  status: TicketStatus;
+  created_at: string;
+  updated_at: string;
+  creator_role: TicketCreatorRole;
+  parking_spot_id: string;
+  parking_spot_title: string;
+  driver_id: string;
+  owner_id: string;
+  booking_start: string;
+  booking_end: string;
+  booking_status: BookingStatus;
+  booking_kind: BookingKind;
+  booking_amount: number;
+  payment_id?: string;
+}
+
+export async function getSupportTicket(ticketId: string): Promise<SupportTicketDetail> {
+  const t = await request<TicketDetailResponse>(`/admin/tickets/${encodeURIComponent(ticketId)}`);
+  return {
+    id: t.id,
+    bookingId: t.booking_id,
+    createdBy: t.created_by,
+    subject: t.subject,
+    status: t.status,
+    createdAt: t.created_at,
+    updatedAt: t.updated_at,
+    creatorRole: t.creator_role,
+    parkingSpotId: t.parking_spot_id,
+    parkingSpotTitle: t.parking_spot_title,
+    driverId: t.driver_id,
+    ownerId: t.owner_id,
+    bookingStart: t.booking_start,
+    bookingEnd: t.booking_end,
+    bookingStatus: t.booking_status,
+    bookingKind: t.booking_kind,
+    bookingAmount: t.booking_amount,
+    paymentId: t.payment_id ?? null,
+  };
+}
+
+interface TicketMessageResponse {
+  id: string;
+  sender_id: string;
+  is_admin: boolean;
+  body: string;
+  created_at: string;
+}
+
+function toTicketMessage(m: TicketMessageResponse): SupportTicketMessage {
+  return { id: m.id, senderId: m.sender_id, isAdmin: m.is_admin, body: m.body, createdAt: m.created_at };
+}
+
+export async function listSupportTicketMessages(ticketId: string): Promise<SupportTicketMessage[]> {
+  const rows = await request<TicketMessageResponse[]>(`/admin/tickets/${encodeURIComponent(ticketId)}/messages`);
+  return rows.map(toTicketMessage);
+}
+
+/** Replies as ParkLink. An OPEN ticket moves to IN_PROGRESS on its own. */
+export async function replySupportTicket(ticketId: string, body: string): Promise<SupportTicketMessage> {
+  const m = await request<TicketMessageResponse>(`/admin/tickets/${encodeURIComponent(ticketId)}/messages`, {
+    method: 'POST',
+    body: JSON.stringify({ body }),
+  });
+  return toTicketMessage(m);
+}
+
+export async function updateSupportTicketStatus(ticketId: string, status: TicketStatus): Promise<void> {
+  await request(`/admin/tickets/${encodeURIComponent(ticketId)}/status`, {
+    method: 'PATCH',
+    body: JSON.stringify({ status }),
+  });
 }
