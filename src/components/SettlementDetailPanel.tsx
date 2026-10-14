@@ -19,8 +19,8 @@ import { Button } from '@/src/components/Button';
 import { SettlementStatusBadge } from '@/src/components/Badge';
 import { colors } from '@/src/theme/colors';
 import { formatCentavos } from '@/src/services/money';
-import { getSettlement, getUserDetail, getAdminAccount, confirmSettlement, cancelSettlement, ProofAsset } from '@/src/api/admin';
-import { AdminUserDetail, Settlement } from '@/src/types';
+import { getSettlement, getUserDetail, getAdminAccount, getPayoutInfoHistory, confirmSettlement, cancelSettlement, ProofAsset } from '@/src/api/admin';
+import { AdminUserDetail, PayoutInfoChange, Settlement } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 import { formatShortDateTime } from '@/src/services/dates';
 
@@ -39,6 +39,21 @@ function displayName(u: { firstName: string | null; lastName: string | null; ema
 // A proof can be a photo of the transfer confirmation or a PDF receipt -- only the former
 // renders as an inline preview image. Checked by extension since that's all a presigned R2
 // URL's query string leaves readable (it's appended after the real path).
+// A change of the bank account (or its holder) this recent before paying is worth a second
+// look: a hijacked account changes the CBU first and then waits for the payout.
+const RECENT_PAYOUT_CHANGE_DAYS = 14;
+
+function recentPayoutChange(history: PayoutInfoChange[]): PayoutInfoChange | null {
+  const since = Date.now() - RECENT_PAYOUT_CHANGE_DAYS * 24 * 60 * 60 * 1000;
+  return (
+    history.find(
+      (c) =>
+        new Date(c.changedAt).getTime() >= since &&
+        ((c.previousCbu !== null && c.previousCbu !== c.cbu) || (c.previousTitular !== null && c.previousTitular !== c.titular)),
+    ) ?? null
+  );
+}
+
 function isImageProof(nameOrUrl: string): boolean {
   return /\.(jpe?g|png|gif|webp|heic)$/i.test(nameOrUrl.split('?')[0]);
 }
@@ -60,6 +75,7 @@ interface SettlementDetailPanelProps {
 export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }: SettlementDetailPanelProps) {
   const [settlement, setSettlement] = useState<Settlement | null>(null);
   const [owner, setOwner] = useState<AdminUserDetail | null>(null);
+  const [payoutChange, setPayoutChange] = useState<PayoutInfoChange | null>(null);
   const [adminUsernames, setAdminUsernames] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +98,7 @@ export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }
     setSubmitError(null);
     setCancelError(null);
     setOwner(null);
+    setPayoutChange(null);
     setAdminUsernames({});
     getSettlement(settlementId)
       .then(async (s) => {
@@ -93,6 +110,9 @@ export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }
         } catch {
           // No datos de cobro to show if this fails -- not fatal to the rest of the panel.
         }
+        getPayoutInfoHistory(s.ownerId)
+          .then((history) => !cancelled && setPayoutChange(recentPayoutChange(history)))
+          .catch(() => {});
         // "Creado por"/"Pagado por" show a username, not a raw admin id -- resolve
         // whichever of the two admin ids this settlement actually has.
         const adminIds = [...new Set([s.createdByAdminId, s.paidByAdminId].filter((id): id is string => !!id))];
@@ -204,6 +224,15 @@ export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }
 
         <Card>
           <Text style={styles.sectionTitle}>Datos de cobro</Text>
+          {payoutChange && settlement.status === 'PENDING' ? (
+            <View style={styles.cbuWarning}>
+              <Text style={styles.cbuWarningTitle}>Los datos de cobro cambiaron el {formatDate(payoutChange.changedAt)}</Text>
+              <Text style={styles.cbuWarningText}>
+                Antes: {payoutChange.previousCbu ?? '-'} ({payoutChange.previousTitular ?? 'sin titular'}). Confirmá con el dueño por otro
+                medio que el cambio lo hizo él antes de transferir.
+              </Text>
+            </View>
+          ) : null}
           {owner?.hasPayoutInfo ? (
             <>
               <DataRow label="CBU" value={owner.cbu ?? '-'} />
@@ -381,6 +410,9 @@ function DataRow({ label, value, emphasize, link }: { label: string; value: stri
 const styles = StyleSheet.create({
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   error: { color: colors.danger, fontSize: 13, textAlign: 'center', marginTop: 8 },
+  cbuWarning: { borderWidth: 1, borderColor: colors.warning, backgroundColor: '#FFF7E6', borderRadius: 8, padding: 10, gap: 4, marginBottom: 8 },
+  cbuWarningTitle: { fontSize: 13, fontWeight: '700', color: colors.text },
+  cbuWarningText: { fontSize: 12, color: colors.text, lineHeight: 18 },
   body: { padding: 16, gap: 14 },
   headerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
   title: { fontSize: 17, fontWeight: '700', color: colors.text },

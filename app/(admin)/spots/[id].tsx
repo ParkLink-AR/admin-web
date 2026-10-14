@@ -17,7 +17,9 @@ import { Card } from '@/src/components/Card';
 import { PageHeader } from '@/src/components/PageHeader';
 import { SpotStatusBadge } from '@/src/components/Badge';
 import { colors } from '@/src/theme/colors';
-import { getParkingSpotById, getUserDetail } from '@/src/api/admin';
+import { getParkingSpotById, getUserDetail, moderateParkingSpot } from '@/src/api/admin';
+import { Button } from '@/src/components/Button';
+import { ActionModal, ActionModalConfig } from '@/src/components/ActionModal';
 import { AdminUserDetail, ParkingSpot } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 import { formatShortDateTime } from '@/src/services/dates';
@@ -40,6 +42,7 @@ export default function SpotDetail() {
   const [owner, setOwner] = useState<AdminUserDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [action, setAction] = useState<ActionModalConfig | null>(null);
 
   useEffect(() => {
     if (!id) return;
@@ -128,6 +131,54 @@ export default function SpotDetail() {
           </Pressable>
         </Card>
 
+        {/* Moderation: a published spot can be suspended (a report, a problem) -- hidden, and
+            its owner can't bring it back -- and restored later. The owner hears about both. */}
+        {spot.status !== 'pending_review' && spot.status !== 'rejected' ? (
+          <Card style={spot.suspendedByAdmin ? styles.suspendedCard : undefined}>
+            <Text style={styles.sectionTitle}>Moderación</Text>
+            {spot.suspendedByAdmin ? (
+              <>
+                <Text style={styles.detailLine}>Suspendida por ParkLink: no se muestra ni recibe reservas, y el dueño no la puede reactivar.</Text>
+                {spot.moderationNote ? <Text style={styles.detailLine}>Motivo: {spot.moderationNote}</Text> : null}
+                <View style={styles.moderationActions}>
+                  <Button
+                    title="Restaurar cochera"
+                    onPress={() =>
+                      setAction({
+                        title: 'Restaurar la cochera',
+                        description: 'Vuelve a publicarse (si la cuenta del dueño está activa) y al dueño le llega un aviso.',
+                        confirmLabel: 'Restaurar',
+                        noteOptional: true,
+                        onConfirm: async () => setSpot(await moderateParkingSpot(spot.id, 'restore')),
+                      })
+                    }
+                  />
+                </View>
+              </>
+            ) : (
+              <>
+                <Text style={styles.detailLine}>Si hay un problema con esta cochera (una denuncia, fotos que no corresponden), suspendela: deja de mostrarse y el dueño recibe el motivo. Las reservas ya hechas siguen en pie.</Text>
+                <View style={styles.moderationActions}>
+                  <Button
+                    title="Suspender cochera"
+                    variant="danger"
+                    onPress={() =>
+                      setAction({
+                        title: 'Suspender la cochera',
+                        description: 'Deja de mostrarse y de recibir reservas nuevas. Al dueño le llega el motivo que escribas.',
+                        confirmLabel: 'Suspender',
+                        variant: 'danger',
+                        notePlaceholder: 'Ej.: las fotos no corresponden a la dirección',
+                        onConfirm: async (note) => setSpot(await moderateParkingSpot(spot.id, 'suspend', note)),
+                      })
+                    }
+                  />
+                </View>
+              </>
+            )}
+          </Card>
+        ) : null}
+
         {spot.verificationPhotos.length > 0 || spot.reviewNotes || spot.status === 'pending_review' ? (
           <Card>
             <Text style={styles.sectionTitle}>Documentación de respaldo</Text>
@@ -195,6 +246,7 @@ export default function SpotDetail() {
           <DataRow label="Actualizada" value={formatDate(spot.updatedAt)} />
         </Card>
       </ScrollView>
+      <ActionModal config={action} onClose={() => setAction(null)} />
     </Screen>
   );
 }
@@ -209,6 +261,8 @@ function DataRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  suspendedCard: { borderColor: colors.danger, borderWidth: 1.5 },
+  moderationActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 8 },
   screen: { flex: 1, backgroundColor: colors.background },
   centered: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24 },
   error: { color: colors.danger, fontSize: 15, textAlign: 'center' },

@@ -12,6 +12,7 @@ import { Settlement, SettlementStatus } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
 import { formatShortDate } from '@/src/services/dates';
+import { centavosToDecimal, downloadCsv } from '@/src/services/csv';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
@@ -110,6 +111,11 @@ export default function Settlements() {
           <Text style={[styles.tabText, status === 'PAID' && styles.tabTextActive]}>Pagadas</Text>
         </Pressable>
       </View>
+      {settlements.length > 0 ? (
+        <Pressable onPress={exportCsv} style={({ hovered }: PressableState) => [styles.exportLink, hovered && styles.tabHovered, CURSOR_POINTER]}>
+          <Text style={styles.exportText}>Exportar CSV ({settlements.length})</Text>
+        </Pressable>
+      ) : null}
 
       {loading ? <ActivityIndicator color={colors.teal} style={styles.spinner} /> : null}
       {error ? <Text style={styles.error}>{error}</Text> : null}
@@ -144,6 +150,19 @@ export default function Settlements() {
       />
     </View>
   );
+
+  function exportCsv() {
+    downloadCsv(`liquidaciones-${status === 'PAID' ? 'pagadas' : 'a-confirmar'}-${new Date().toISOString().slice(0, 10)}.csv`, settlements, [
+      { header: 'Liquidación', value: (s) => s.id },
+      { header: 'Dueño', value: (s) => s.ownerId },
+      { header: 'Estado', value: (s) => (s.status === 'PAID' ? 'Pagada' : 'A confirmar') },
+      { header: 'Bruto', value: (s) => centavosToDecimal(s.grossAmount) },
+      { header: 'Comisión', value: (s) => centavosToDecimal(s.commissionAmount) },
+      { header: 'Neto', value: (s) => centavosToDecimal(s.netAmount) },
+      { header: 'Creada', value: (s) => s.createdAt },
+      { header: 'Pagada', value: (s) => s.paidAt },
+    ]);
+  }
 
   if (isDesktop) {
     return (
@@ -184,6 +203,8 @@ export default function Settlements() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.background },
+  exportLink: { alignSelf: 'flex-end', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, marginBottom: 6 },
+  exportText: { fontSize: 13, fontWeight: '700', color: colors.teal },
 
   // Desktop master-detail: header spans full width, then a row of
   // [list pane | detail pane] below it.

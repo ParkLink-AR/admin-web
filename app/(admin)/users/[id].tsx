@@ -10,11 +10,12 @@ import { colors } from '@/src/theme/colors';
 import { formatCentavos } from '@/src/services/money';
 import {
   getUserDetail,
+  getPayoutInfoHistory,
   getUserParkingSpots,
   getUserBookingHistory,
   getOwnerReceivedBookings,
 } from '@/src/api/admin';
-import { AdminUserDetail, ParkingSpot, DriverBooking, OwnerReceivedBooking } from '@/src/types';
+import { AdminUserDetail, ParkingSpot, DriverBooking, OwnerReceivedBooking, PayoutInfoChange } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 import { AccountStatusCard } from '@/src/components/AccountStatusCard';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
@@ -53,6 +54,20 @@ export default function UserDetail() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>('spots');
+  const [payoutHistory, setPayoutHistory] = useState<PayoutInfoChange[]>([]);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // Every change of the bank details, newest first -- best effort, the card works without it.
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    getPayoutInfoHistory(id)
+      .then((rows) => !cancelled && setPayoutHistory(rows))
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
   const isDesktop = useIsDesktop();
 
   useEffect(() => {
@@ -155,6 +170,31 @@ export default function UserDetail() {
             ) : (
               <Text style={styles.hint}>Datos de cobro no cargados.</Text>
             )}
+            {payoutHistory.length > 0 ? (
+              <>
+                <Pressable onPress={() => setHistoryOpen((v) => !v)} style={styles.historyToggle}>
+                  <Text style={styles.historyToggleText}>
+                    {historyOpen ? 'Ocultar' : 'Ver'} historial de cambios ({payoutHistory.length})
+                  </Text>
+                </Pressable>
+                {historyOpen
+                  ? payoutHistory.map((c) => (
+                      <View key={c.id} style={styles.historyRow}>
+                        <Text style={styles.caption}>{formatDate(c.changedAt)}</Text>
+                        <Text style={styles.historyText}>
+                          CBU {c.previousCbu ?? '(vacío)'} → {c.cbu ?? '(vacío)'}
+                        </Text>
+                        {c.previousTitular !== c.titular ? (
+                          <Text style={styles.historyText}>Titular {c.previousTitular ?? '(vacío)'} → {c.titular ?? '(vacío)'}</Text>
+                        ) : null}
+                        {c.previousCuil !== c.cuil ? (
+                          <Text style={styles.historyText}>CUIL {c.previousCuil ?? '(vacío)'} → {c.cuil ?? '(vacío)'}</Text>
+                        ) : null}
+                      </View>
+                    ))
+                  : null}
+              </>
+            ) : null}
           </Card>
         </View>
 
@@ -331,6 +371,10 @@ const styles = StyleSheet.create({
   caption: { fontSize: 12, color: colors.textSecondary, marginTop: 6 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 10 },
   hint: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', paddingVertical: 16 },
+  historyToggle: { marginTop: 8, cursor: 'pointer' } as ViewStyle,
+  historyToggleText: { fontSize: 13, fontWeight: '700', color: colors.teal },
+  historyRow: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6, marginTop: 6, gap: 2 },
+  historyText: { fontSize: 12, color: colors.text },
   dataRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
   dataLabel: { fontSize: 13, color: colors.textSecondary },
   dataValue: { fontSize: 13, color: colors.text, fontWeight: '600' },

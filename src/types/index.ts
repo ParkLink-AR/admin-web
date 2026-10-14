@@ -77,6 +77,9 @@ export interface ParkingSpot {
   // muestran al conductor. reviewNotes es el motivo cuando la cochera fue rechazada.
   verificationPhotos: string[];
   reviewNotes: string | null;
+  // Suspendida por ParkLink desde el panel (con el motivo): el dueño no la puede reactivar.
+  suspendedByAdmin?: boolean;
+  moderationNote?: string | null;
   status: ParkingSpotStatus;
   createdAt: string;
   updatedAt: string;
@@ -328,5 +331,142 @@ export interface SupportTicketMessage {
   /** Sent by ParkLink staff (from this panel). */
   isAdmin: boolean;
   body: string;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Admin tools: bookings, reviews, reports, payments, metrics, audit, announcements
+// ---------------------------------------------------------------------------
+
+/** A booking as the admin panel loads it by id (GET /admin/bookings/{id}). Amounts in centavos. */
+export interface AdminBooking {
+  id: string;
+  parkingSpotId: string;
+  userId: string;
+  start: string;
+  end: string;
+  status: BookingStatus;
+  kind: BookingKind;
+  amount: number;
+  ownerAmount: number | null;
+  refundedAmount: number;
+  paymentId: string | null;
+  paidAt: string | null;
+  cancellationReason: string | null;
+  adminNote: string | null;
+  verificationReview: string | null;
+  verifiedAt: string | null;
+  vehiclePlate: string | null;
+  vehicleBrand: string | null;
+  vehicleModel: string | null;
+  vehicleType: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminBookingFilters {
+  q?: string;
+  status?: BookingStatus | '';
+  spotId?: string;
+  userId?: string;
+  from?: string;
+  to?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface BookingChatMessage {
+  id: string;
+  senderId: string;
+  body: string;
+  createdAt: string;
+}
+
+export interface AdminReview {
+  id: string;
+  bookingId: string;
+  reviewerId: string;
+  targetType: 'spot' | 'owner' | 'driver';
+  targetId: string;
+  rating: number;
+  comment: string;
+  createdAt: string;
+  hiddenAt: string | null;
+  hiddenReason: string | null;
+}
+
+export type ReportStatus = 'PENDING' | 'RESOLVED' | 'DISMISSED';
+export type ReportTargetType = 'spot' | 'user' | 'review';
+
+export interface UserReport {
+  id: string;
+  reporterId: string;
+  targetType: ReportTargetType;
+  targetId: string;
+  reason: string;
+  details: string;
+  status: ReportStatus;
+  adminNote: string | null;
+  resolvedAt: string | null;
+  createdAt: string;
+}
+
+/** A Mercado Pago payment, as payment-service records it. Amounts in pesos. */
+export interface AdminPayment {
+  paymentId: string;
+  bookingId: string | null;
+  amount: number;
+  refundedAmount: number;
+  currency: string;
+  status: string;
+  payerEmail: string | null;
+  approvedAt: string | null;
+  createdAt: string;
+  bookingStatus: BookingStatus | null;
+  /** Approved by Mercado Pago but the booking isn't paid on ParkLink's side. */
+  needsAttention: boolean;
+}
+
+/** The dashboard's numbers for the last `days` days. Amounts in centavos. */
+export interface AdminMetrics {
+  days: number;
+  paidBookings: number;
+  grossAmount: number;
+  commission: number;
+  refunded: number;
+  statusCounts: Partial<Record<BookingStatus, number>>;
+  daily: { date: string; paid: number; amount: number }[];
+}
+
+export interface PayoutInfoChange {
+  id: string;
+  previousCbu: string | null;
+  cbu: string | null;
+  previousTitular: string | null;
+  titular: string | null;
+  previousCuil: string | null;
+  cuil: string | null;
+  changedAt: string;
+}
+
+export interface AuditEntry {
+  id: string;
+  adminId: string | null;
+  adminUsername: string | null;
+  method: string;
+  path: string;
+  statusCode: number;
+  summary: string | null;
+  createdAt: string;
+}
+
+export type BroadcastAudience = 'all' | 'drivers' | 'owners';
+
+export interface Broadcast {
+  id: string;
+  title: string;
+  body: string;
+  audience: BroadcastAudience;
+  recipients: number;
   createdAt: string;
 }

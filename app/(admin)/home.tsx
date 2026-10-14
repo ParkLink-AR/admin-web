@@ -10,12 +10,14 @@ import { useSessionStore } from '@/src/store/useSessionStore';
 import { ADMIN_SECTION_GROUPS, AdminSection, sectionsFor } from '@/src/navigation';
 import {
   countFailedRefunds,
+  countPendingReports,
   getOwnerPendingBalances,
   listPendingParkingSpots,
   listSettlements,
   listUnverifiedBookings,
 } from '@/src/api/admin';
 import { formatCentavos } from '@/src/services/money';
+import { MetricsPanel } from '@/src/components/MetricsPanel';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 
@@ -103,6 +105,7 @@ export default function Home() {
   const balances = useFigure(getOwnerPendingBalances);
   const draftSettlements = useFigure(() => listSettlements('PENDING').then((r) => r.length));
   const failedRefunds = useFigure(countFailedRefunds);
+  const pendingReports = useFigure(countPendingReports);
 
   const balancesTotal = balances ? balances.reduce((sum, b) => sum + b.pendingNetAmount, 0) : 0;
 
@@ -156,7 +159,17 @@ export default function Home() {
             icon="receipt"
             href="/(admin)/settlements"
           />
+          <PendingTile
+            count={pendingReports}
+            label="Denuncias sin resolver"
+            detail="Cocheras, usuarios o reseñas"
+            icon="flag"
+            href="/(admin)/reports"
+          />
         </View>
+
+        <Text style={styles.heading}>Métricas</Text>
+        <MetricsPanel />
 
         <Text style={styles.heading}>Secciones</Text>
         <View style={styles.groups}>

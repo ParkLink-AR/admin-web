@@ -7,6 +7,18 @@ import {
   AdminAccountRole,
   AdminUserDetail,
   AdminUserSummary,
+  AdminBooking,
+  AdminBookingFilters,
+  AdminMetrics,
+  AdminPayment,
+  AdminReview,
+  AuditEntry,
+  BookingChatMessage,
+  Broadcast,
+  BroadcastAudience,
+  PayoutInfoChange,
+  ReportStatus,
+  UserReport,
   BookingKind,
   BookingStatus,
   CommissionSettings,
@@ -868,4 +880,247 @@ export async function updateSupportTicketStatus(ticketId: string, status: Ticket
     method: 'PATCH',
     body: JSON.stringify({ status }),
   });
+}
+
+// ---------------------------------------------------------------------------
+// Bookings (booking-service, ADMIN): search, detail, cancel/refund, chat
+// ---------------------------------------------------------------------------
+
+interface AdminBookingResponse {
+  id: string;
+  parking_spot_id: string;
+  user_id: string;
+  start: string;
+  end: string;
+  status: BookingStatus;
+  kind: BookingKind;
+  amount: number;
+  owner_amount?: number;
+  refunded_amount: number;
+  payment_id?: string;
+  paid_at?: string;
+  cancellation_reason?: string;
+  admin_note?: string;
+  verification_review?: string;
+  verified_at?: string;
+  vehicle_plate?: string;
+  vehicle_brand?: string;
+  vehicle_model?: string;
+  vehicle_type?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+function toAdminBooking(b: AdminBookingResponse): AdminBooking {
+  return {
+    id: b.id,
+    parkingSpotId: b.parking_spot_id,
+    userId: b.user_id,
+    start: b.start,
+    end: b.end,
+    status: b.status,
+    kind: b.kind,
+    amount: b.amount,
+    ownerAmount: b.owner_amount ?? null,
+    refundedAmount: b.refunded_amount,
+    paymentId: b.payment_id ?? null,
+    paidAt: b.paid_at ?? null,
+    cancellationReason: b.cancellation_reason ?? null,
+    adminNote: b.admin_note ?? null,
+    verificationReview: b.verification_review ?? null,
+    verifiedAt: b.verified_at ?? null,
+    vehiclePlate: b.vehicle_plate ?? null,
+    vehicleBrand: b.vehicle_brand ?? null,
+    vehicleModel: b.vehicle_model ?? null,
+    vehicleType: b.vehicle_type ?? null,
+    createdAt: b.created_at,
+    updatedAt: b.updated_at,
+  };
+}
+
+export async function searchBookings(filters: AdminBookingFilters): Promise<{ items: AdminBooking[]; total: number }> {
+  const params = new URLSearchParams();
+  if (filters.q) params.set('q', filters.q);
+  if (filters.status) params.set('status', filters.status);
+  if (filters.spotId) params.set('spot_id', filters.spotId);
+  if (filters.userId) params.set('user_id', filters.userId);
+  if (filters.from) params.set('from', filters.from);
+  if (filters.to) params.set('to', filters.to);
+  params.set('limit', String(filters.limit ?? 50));
+  params.set('offset', String(filters.offset ?? 0));
+  const res = await request<{ items: AdminBookingResponse[]; total: number }>(`/admin/bookings?${params.toString()}`);
+  return { items: res.items.map(toAdminBooking), total: res.total };
+}
+
+export async function getAdminBooking(bookingId: string): Promise<AdminBooking> {
+  return toAdminBooking(await request<AdminBookingResponse>(`/admin/bookings/${encodeURIComponent(bookingId)}`));
+}
+
+export async function getBookingChat(bookingId: string): Promise<BookingChatMessage[]> {
+  const rows = await request<{ id: string; sender_id: string; body: string; created_at: string }[]>(
+    `/admin/bookings/${encodeURIComponent(bookingId)}/messages`,
+  );
+  return rows.map((m) => ({ id: m.id, senderId: m.sender_id, body: m.body, createdAt: m.created_at }));
+}
+
+/** Cancels on ParkLink's behalf. refundAmount in centavos; omitted = all of it. */
+export async function adminCancelBooking(bookingId: string, note: string, refundAmount?: number): Promise<AdminBooking> {
+  return toAdminBooking(
+    await request<AdminBookingResponse>(`/admin/bookings/${encodeURIComponent(bookingId)}/cancel`, {
+      method: 'POST',
+      body: JSON.stringify({ note, ...(refundAmount !== undefined ? { refund_amount: refundAmount } : {}) }),
+    }),
+  );
+}
+
+/** Refunds (part of) a finished booking. amount in centavos. */
+export async function adminRefundBooking(
+  bookingId: string, amount: number, note: string,
+): Promise<{ booking: AdminBooking; absorbedByParkLink: boolean }> {
+  const res = await request<{ booking: AdminBookingResponse; absorbed_by_parklink: boolean }>(
+    `/admin/bookings/${encodeURIComponent(bookingId)}/refund`,
+    { method: 'POST', body: JSON.stringify({ amount, note }) },
+  );
+  return { booking: toAdminBooking(res.booking), absorbedByParkLink: res.absorbed_by_parklink };
+}
+
+// ---------------------------------------------------------------------------
+// Reviews moderation, reports, metrics (booking-service, ADMIN)
+// ---------------------------------------------------------------------------
+
+export async function listAdminReviews(hidden?: boolean): Promise<AdminReview[]> {
+  const query = hidden === undefined ? '' : `?hidden=${hidden}`;
+  const rows = await request<{
+    id: string; booking_id: string; reviewer_id: string; target_type: AdminReview['targetType'];
+    target_id: string; rating: number; comment: string; created_at: string; hidden_at?: string; hidden_reason?: string;
+  }[]>(`/admin/reviews${query}`);
+  return rows.map((r) => ({
+    id: r.id, bookingId: r.booking_id, reviewerId: r.reviewer_id, targetType: r.target_type, targetId: r.target_id,
+    rating: r.rating, comment: r.comment, createdAt: r.created_at, hiddenAt: r.hidden_at ?? null, hiddenReason: r.hidden_reason ?? null,
+  }));
+}
+
+export async function hideReview(reviewId: string, reason: string): Promise<void> {
+  await request(`/admin/reviews/${encodeURIComponent(reviewId)}/hide`, { method: 'POST', body: JSON.stringify({ reason }) });
+}
+
+export async function restoreReview(reviewId: string): Promise<void> {
+  await request(`/admin/reviews/${encodeURIComponent(reviewId)}/restore`, { method: 'POST' });
+}
+
+interface ReportResponse {
+  id: string; reporter_id: string; target_type: UserReport['targetType']; target_id: string; reason: string;
+  details: string; status: ReportStatus; admin_note?: string; resolved_at?: string; created_at: string;
+}
+
+function toReport(r: ReportResponse): UserReport {
+  return {
+    id: r.id, reporterId: r.reporter_id, targetType: r.target_type, targetId: r.target_id, reason: r.reason,
+    details: r.details, status: r.status, adminNote: r.admin_note ?? null, resolvedAt: r.resolved_at ?? null, createdAt: r.created_at,
+  };
+}
+
+export async function listReports(status?: ReportStatus): Promise<UserReport[]> {
+  const rows = await request<ReportResponse[]>(`/admin/reports${status ? `?status=${status}` : ''}`);
+  return rows.map(toReport);
+}
+
+export async function countPendingReports(): Promise<number> {
+  return (await request<{ count: number }>('/admin/reports/count')).count;
+}
+
+export async function resolveReport(reportId: string, status: 'RESOLVED' | 'DISMISSED', note: string): Promise<UserReport> {
+  return toReport(await request<ReportResponse>(`/admin/reports/${encodeURIComponent(reportId)}/resolve`, {
+    method: 'POST', body: JSON.stringify({ status, note }),
+  }));
+}
+
+export async function getAdminMetrics(days = 30): Promise<AdminMetrics> {
+  const r = await request<{
+    days: number; paid_bookings: number; gross_amount: number; commission: number; refunded: number;
+    status_counts: Record<string, number>; daily: { date: string; paid: number; amount: number }[];
+  }>(`/admin/metrics?days=${days}`);
+  return {
+    days: r.days, paidBookings: r.paid_bookings, grossAmount: r.gross_amount, commission: r.commission,
+    refunded: r.refunded, statusCounts: r.status_counts as AdminMetrics['statusCounts'], daily: r.daily,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Payments (payment-service), spots moderation (parking-service)
+// ---------------------------------------------------------------------------
+
+export async function listPayments(
+  filters: { q?: string; status?: string; limit?: number; offset?: number },
+): Promise<{ items: AdminPayment[]; total: number }> {
+  const params = new URLSearchParams();
+  if (filters.q) params.set('q', filters.q);
+  if (filters.status) params.set('status', filters.status);
+  params.set('limit', String(filters.limit ?? 50));
+  params.set('offset', String(filters.offset ?? 0));
+  return request<{ items: AdminPayment[]; total: number }>(`/admin/payments?${params.toString()}`);
+}
+
+/** Every spot (status 'all'), one status, or 'suspended' ones; q matches title or address. */
+export async function searchParkingSpots(status: string, q: string): Promise<ParkingSpot[]> {
+  const params = new URLSearchParams({ status: status || 'all' });
+  if (q) params.set('q', q);
+  return request<ParkingSpotResponse[]>(`/admin/parking-spots?${params.toString()}`);
+}
+
+export async function moderateParkingSpot(spotId: string, action: 'suspend' | 'restore', reason?: string): Promise<ParkingSpot> {
+  return request<ParkingSpotResponse>(`/admin/parking-spots/${encodeURIComponent(spotId)}/moderation`, {
+    method: 'PATCH', body: JSON.stringify({ action, ...(reason ? { reason } : {}) }),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Bank detail history, audit log (auth-service), announcements (notifications-service)
+// ---------------------------------------------------------------------------
+
+export async function getPayoutInfoHistory(userId: string): Promise<PayoutInfoChange[]> {
+  const rows = await request<{
+    id: string; previous_cbu?: string; cbu?: string; previous_titular?: string; titular?: string;
+    previous_cuil?: string; cuil?: string; changed_at: string;
+  }[]>(`/admin/users/${encodeURIComponent(userId)}/payout-info-history`);
+  return rows.map((r) => ({
+    id: r.id, previousCbu: r.previous_cbu ?? null, cbu: r.cbu ?? null, previousTitular: r.previous_titular ?? null,
+    titular: r.titular ?? null, previousCuil: r.previous_cuil ?? null, cuil: r.cuil ?? null, changedAt: r.changed_at,
+  }));
+}
+
+export async function getAuditLog(
+  filters: { admin?: string; query?: string; limit?: number; offset?: number },
+): Promise<{ items: AuditEntry[]; total: number }> {
+  const params = new URLSearchParams();
+  if (filters.admin) params.set('admin', filters.admin);
+  if (filters.query) params.set('query', filters.query);
+  params.set('limit', String(filters.limit ?? 50));
+  params.set('offset', String(filters.offset ?? 0));
+  const res = await request<{ items: {
+    id: string; admin_id?: string; admin_username?: string; method: string; path: string;
+    status_code: number; summary?: string; created_at: string;
+  }[]; total: number }>(`/admin/audit-log?${params.toString()}`);
+  return {
+    total: res.total,
+    items: res.items.map((e) => ({
+      id: e.id, adminId: e.admin_id ?? null, adminUsername: e.admin_username ?? null, method: e.method,
+      path: e.path, statusCode: e.status_code, summary: e.summary ?? null, createdAt: e.created_at,
+    })),
+  };
+}
+
+export async function listBroadcasts(): Promise<Broadcast[]> {
+  const rows = await request<{ id: string; title: string; body: string; audience: BroadcastAudience; recipients: number; created_at: string }[]>(
+    '/admin/broadcasts',
+  );
+  return rows.map((b) => ({ id: b.id, title: b.title, body: b.body, audience: b.audience, recipients: b.recipients, createdAt: b.created_at }));
+}
+
+export async function sendBroadcast(title: string, body: string, audience: BroadcastAudience): Promise<Broadcast> {
+  const b = await request<{ id: string; title: string; body: string; audience: BroadcastAudience; recipients: number; created_at: string }>(
+    '/admin/broadcasts',
+    { method: 'POST', body: JSON.stringify({ title, body, audience }) },
+  );
+  return { id: b.id, title: b.title, body: b.body, audience: b.audience, recipients: b.recipients, createdAt: b.created_at };
 }

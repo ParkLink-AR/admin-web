@@ -6,7 +6,7 @@ import { useSessionStore } from '@/src/store/useSessionStore';
 import { colors } from '@/src/theme/colors';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
 import { AdminSection, sectionsFor } from '@/src/navigation';
-import { countFailedRefunds, countTicketsAwaitingReply } from '@/src/api/admin';
+import { countFailedRefunds, countPendingReports, countTicketsAwaitingReply } from '@/src/api/admin';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 
@@ -30,6 +30,7 @@ function Footer() {
 function usePendingCounts(enabled: boolean, pathname: string): Partial<Record<NonNullable<AdminSection['pendingCount']>, number>> {
   const [refunds, setRefunds] = useState<number | undefined>(undefined);
   const [tickets, setTickets] = useState<number | undefined>(undefined);
+  const [reports, setReports] = useState<number | undefined>(undefined);
   useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
@@ -39,11 +40,14 @@ function usePendingCounts(enabled: boolean, pathname: string): Partial<Record<No
     countTicketsAwaitingReply()
       .then((count) => !cancelled && setTickets(count))
       .catch(() => {});
+    countPendingReports()
+      .then((count) => !cancelled && setReports(count))
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
   }, [enabled, pathname]);
-  return { refunds, tickets };
+  return { refunds, tickets, reports };
 }
 
 function CountPill({ count, active }: { count: number | undefined; active: boolean }) {
