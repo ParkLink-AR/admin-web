@@ -173,7 +173,7 @@ export default function BookingDetail() {
           <DataRow label="Tipo" value={booking.kind === 'HOURLY' ? 'Por hora' : 'Estadía'} />
           <DataRow label="Pagó el conductor" value={formatCentavos(booking.amount)} />
           {booking.ownerAmount !== null ? <DataRow label="Le corresponde al propietario" value={formatCentavos(booking.ownerAmount)} /> : null}
-          {booking.refundedAmount > 0 ? <DataRow label="Reembolsado por ParkLink" value={formatCentavos(booking.refundedAmount)} /> : null}
+          {booking.refundedAmount > 0 ? <DataRow label="Reembolsado al conductor" value={formatCentavos(booking.refundedAmount)} /> : null}
           {booking.vehiclePlate ? (
             <DataRow
               label="Vehículo"
@@ -186,7 +186,13 @@ export default function BookingDetail() {
           {booking.cancellationReason ? (
             <DataRow label="Motivo de cancelación" value={CANCELLATION_TEXT[booking.cancellationReason] ?? booking.cancellationReason} />
           ) : null}
+          {booking.cancellationNote ? <DataRow label="Motivo del propietario" value={booking.cancellationNote} /> : null}
           {booking.adminNote ? <DataRow label="Nota de ParkLink" value={booking.adminNote} /> : null}
+          {booking.parentBookingId ? (
+            <Pressable onPress={() => router.push(`/(admin)/bookings/${booking.parentBookingId}` as never)} style={CURSOR_POINTER}>
+              <Text style={styles.link}>Es una extensión de otra reserva · ver la original</Text>
+            </Pressable>
+          ) : null}
           <DataRow label="Creada" value={formatShortDateTime(booking.createdAt)} />
         </Card>
 
@@ -295,6 +301,7 @@ function DataRow({ label, value }: { label: string; value: string }) {
 }
 
 const styles = StyleSheet.create({
+  link: { fontSize: 13, fontWeight: '700', color: colors.teal, marginTop: 6 },
   screen: { flex: 1, backgroundColor: colors.background },
   body: { padding: 24, gap: 14, maxWidth: 900, width: '100%', alignSelf: 'center' },
   error: { color: colors.danger, fontSize: 14 },

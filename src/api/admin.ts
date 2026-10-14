@@ -44,6 +44,7 @@ import {
   UnverifiedBooking,
   UserStatus,
   VerificationReviewDecision,
+  OwnerCancellationStats,
 } from '@/src/types';
 
 // -------------------------
@@ -901,6 +902,8 @@ interface AdminBookingResponse {
   paid_at?: string;
   cancellation_reason?: string;
   admin_note?: string;
+  cancellation_note?: string;
+  parent_booking_id?: string;
   verification_review?: string;
   verified_at?: string;
   vehicle_plate?: string;
@@ -927,6 +930,8 @@ function toAdminBooking(b: AdminBookingResponse): AdminBooking {
     paidAt: b.paid_at ?? null,
     cancellationReason: b.cancellation_reason ?? null,
     adminNote: b.admin_note ?? null,
+    cancellationNote: b.cancellation_note ?? null,
+    parentBookingId: b.parent_booking_id ?? null,
     verificationReview: b.verification_review ?? null,
     verifiedAt: b.verified_at ?? null,
     vehiclePlate: b.vehicle_plate ?? null,
@@ -950,6 +955,14 @@ export async function searchBookings(filters: AdminBookingFilters): Promise<{ it
   params.set('offset', String(filters.offset ?? 0));
   const res = await request<{ items: AdminBookingResponse[]; total: number }>(`/admin/bookings?${params.toString()}`);
   return { items: res.items.map(toAdminBooking), total: res.total };
+}
+
+/** How many bookings an owner had accepted and then called off. */
+export async function getOwnerCancellationStats(ownerId: string): Promise<OwnerCancellationStats> {
+  const r = await request<{ total: number; last_90_days: number }>(
+    `/admin/owners/${encodeURIComponent(ownerId)}/cancellation-stats`,
+  );
+  return { total: r.total, last90Days: r.last_90_days };
 }
 
 export async function getAdminBooking(bookingId: string): Promise<AdminBooking> {

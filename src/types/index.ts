@@ -353,6 +353,10 @@ export interface AdminBooking {
   paymentId: string | null;
   paidAt: string | null;
   cancellationReason: string | null;
+  /** The owner's reason, when they cancelled a booking they had accepted. */
+  cancellationNote: string | null;
+  /** Set on an extension: the booking it continues. */
+  parentBookingId: string | null;
   adminNote: string | null;
   verificationReview: string | null;
   verifiedAt: string | null;
@@ -436,6 +440,11 @@ export interface AdminMetrics {
   refunded: number;
   statusCounts: Partial<Record<BookingStatus, number>>;
   daily: { date: string; paid: number; amount: number }[];
+}
+
+export interface OwnerCancellationStats {
+  total: number;
+  last90Days: number;
 }
 
 export interface PayoutInfoChange {

@@ -11,11 +11,12 @@ import { formatCentavos } from '@/src/services/money';
 import {
   getUserDetail,
   getPayoutInfoHistory,
+  getOwnerCancellationStats,
   getUserParkingSpots,
   getUserBookingHistory,
   getOwnerReceivedBookings,
 } from '@/src/api/admin';
-import { AdminUserDetail, ParkingSpot, DriverBooking, OwnerReceivedBooking, PayoutInfoChange } from '@/src/types';
+import { AdminUserDetail, ParkingSpot, DriverBooking, OwnerReceivedBooking, OwnerCancellationStats, PayoutInfoChange } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 import { AccountStatusCard } from '@/src/components/AccountStatusCard';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
@@ -56,6 +57,7 @@ export default function UserDetail() {
   const [tab, setTab] = useState<Tab>('spots');
   const [payoutHistory, setPayoutHistory] = useState<PayoutInfoChange[]>([]);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [cancellations, setCancellations] = useState<OwnerCancellationStats | null>(null);
 
   // Every change of the bank details, newest first -- best effort, the card works without it.
   useEffect(() => {
@@ -63,6 +65,10 @@ export default function UserDetail() {
     let cancelled = false;
     getPayoutInfoHistory(id)
       .then((rows) => !cancelled && setPayoutHistory(rows))
+      .catch(() => {});
+    // Bookings they accepted as an owner and then called off -- a pattern worth noticing.
+    getOwnerCancellationStats(id)
+      .then((stats) => !cancelled && setCancellations(stats))
       .catch(() => {});
     return () => {
       cancelled = true;
@@ -199,6 +205,16 @@ export default function UserDetail() {
         </View>
 
         <AccountStatusCard user={user} onChange={setUser} />
+
+        {cancellations && cancellations.total > 0 ? (
+          <Card style={styles.cancellationsCard}>
+            <Ionicons name="alert-circle" size={18} color={colors.warning} />
+            <Text style={styles.cancellationsText}>
+              Como propietario canceló {cancellations.total} {cancellations.total === 1 ? 'reserva que ya había aceptado' : 'reservas que ya había aceptado'}
+              {cancellations.last90Days > 0 ? ` (${cancellations.last90Days} en los últimos 90 días)` : ''}.
+            </Text>
+          </Card>
+        ) : null}
 
         <View style={styles.tabBar}>
           <TabButton label="Cocheras" active={tab === 'spots'} onPress={() => setTab('spots')} />
@@ -371,6 +387,8 @@ const styles = StyleSheet.create({
   caption: { fontSize: 12, color: colors.textSecondary, marginTop: 6 },
   sectionTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 10 },
   hint: { fontSize: 14, color: colors.textSecondary, textAlign: 'center', paddingVertical: 16 },
+  cancellationsCard: { flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: colors.warning },
+  cancellationsText: { flex: 1, fontSize: 14, color: colors.text },
   historyToggle: { marginTop: 8, cursor: 'pointer' } as ViewStyle,
   historyToggleText: { fontSize: 13, fontWeight: '700', color: colors.teal },
   historyRow: { borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 6, marginTop: 6, gap: 2 },

@@ -8,6 +8,8 @@ export const CANCELLATION_TEXT: Record<string, string> = {
   OWNER_ACCOUNT_CLOSED: 'Cuenta del propietario cerrada o suspendida',
   DRIVER_ACCOUNT_CLOSED: 'Cuenta del conductor cerrada o suspendida',
   ADMIN_CANCELLED: 'Cancelada por ParkLink',
+  OWNER_CANCELLED: 'Cancelada por el propietario (ya la había aceptado)',
+  DRIVER_LATE_CANCELLED: 'Cancelada por el conductor en la última hora (reembolso parcial)',
 };
 
 export const BOOKING_STATUS_TEXT: Record<BookingStatus, string> = {
