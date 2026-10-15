@@ -400,7 +400,7 @@ export interface AdminReview {
 }
 
 export type ReportStatus = 'PENDING' | 'RESOLVED' | 'DISMISSED';
-export type ReportTargetType = 'spot' | 'user' | 'review';
+export type ReportTargetType = 'spot' | 'user' | 'review' | 'booking';
 
 export interface UserReport {
   id: string;

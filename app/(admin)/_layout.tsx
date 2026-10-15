@@ -89,9 +89,17 @@ export default function AdminLayout() {
         <View style={styles.sidebar}>
           <View>
             <Image source={require('@/assets/logo-letras-darkmode.png')} style={styles.brandLogo} resizeMode="contain" />
-            <Text style={styles.brandUsername} numberOfLines={1}>Usuario: {user.username}</Text>
+            <View style={styles.userRow}>
+              <Text style={styles.brandUsername} numberOfLines={1}>Usuario: {user.username}</Text>
+              <Pressable onPress={handleLogout} style={{ cursor: 'pointer' } as unknown as ViewStyle}>
+                {({ hovered }: PressableState) => (
+                  <Text style={[styles.brandUsername, hovered && styles.logoutHovered]}>Cerrar sesión</Text>
+                )}
+              </Pressable>
+            </View>
           </View>
-          <View style={styles.sidebarNav}>
+          {/* The menu scrolls on its own when the window is too short for every section. */}
+          <ScrollView style={styles.sidebarScroll} contentContainerStyle={styles.sidebarNav} showsVerticalScrollIndicator={false}>
             {navItems.map((item) => {
               const active = isActive(item.match);
               return (
@@ -111,18 +119,7 @@ export default function AdminLayout() {
                 </Pressable>
               );
             })}
-          </View>
-          <Pressable
-            onPress={handleLogout}
-            style={({ hovered }: PressableState) => [
-              styles.sidebarLogout,
-              hovered && styles.sidebarLogoutHovered,
-              { cursor: 'pointer' } as unknown as ViewStyle,
-            ]}
-          >
-            <Ionicons name="log-out-outline" size={18} color={colors.danger} />
-            <Text style={styles.sidebarLogoutText}>Cerrar sesión</Text>
-          </Pressable>
+          </ScrollView>
         </View>
         <View style={styles.desktopContent}>
           <Slot />
@@ -183,22 +180,21 @@ const styles = StyleSheet.create({
     backgroundColor: colors.deepNavy,
     paddingVertical: 24,
     paddingHorizontal: 16,
-    justifyContent: 'space-between',
   },
   // logo-letras-darkmode.png is 2170x725 (~2.99:1), different proportions
   // than the light logo -- sized to match that ratio, not copied from it.
   brandLogo: { width: 152, height: 51 },
-  brandUsername: { color: 'rgba(255,255,255,0.6)', fontSize: 12, marginTop: 8 },
+  userRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8, marginTop: 8 },
+  brandUsername: { flexShrink: 1, color: 'rgba(255,255,255,0.6)', fontSize: 12 },
+  logoutHovered: { color: colors.white, textDecorationLine: 'underline' },
+  sidebarScroll: { flex: 1, marginTop: 24 },
   mobileBrandLogo: { width: 120, height: 40 },
-  sidebarNav: { gap: 4, marginTop: 32 },
+  sidebarNav: { gap: 4 },
   sidebarItem: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 8 },
   sidebarItemActive: { backgroundColor: 'rgba(255,255,255,0.12)' },
   sidebarItemHovered: { backgroundColor: 'rgba(255,255,255,0.06)' },
   sidebarItemText: { color: 'rgba(255,255,255,0.75)', fontSize: 14, fontWeight: '600' },
   sidebarItemTextActive: { color: colors.white },
-  sidebarLogout: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 12, borderRadius: 8 },
-  sidebarLogoutHovered: { backgroundColor: 'rgba(220, 38, 38, 0.1)' },
-  sidebarLogoutText: { color: colors.danger, fontSize: 14, fontWeight: '600' },
   desktopContent: { flex: 1, minWidth: 0 },
 
   // Narrow fallback: top bar with a horizontally-scrollable nav strip.

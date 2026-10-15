@@ -23,9 +23,10 @@ const TABS: { value: ReportStatus; label: string }[] = [
   { value: 'DISMISSED', label: 'Descartadas' },
 ];
 
-const TARGET_TEXT: Record<UserReport['targetType'], string> = { spot: 'Cochera', user: 'Usuario', review: 'Reseña' };
+const TARGET_TEXT: Record<UserReport['targetType'], string> = { spot: 'Cochera', user: 'Usuario', review: 'Reseña', booking: 'Reserva' };
 
-// "Denuncias" -- what users reported from the app (a spot, a person, a review). Each one
+// "Denuncias" -- what users reported from the app (a spot, a person, a review, a problem with
+// a booking: the driver never came or overstayed, the spot was taken). Each one
 // links to what was reported, where the action happens (suspend the spot or the account,
 // hide the review); here it's then closed as resolved or dismissed, with a note.
 export default function Reports() {
@@ -66,6 +67,7 @@ export default function Reports() {
   function openTarget(report: UserReport) {
     if (report.targetType === 'spot') router.push(`/(admin)/spots/${report.targetId}` as never);
     else if (report.targetType === 'user') router.push(`/(admin)/users/${report.targetId}` as never);
+    else if (report.targetType === 'booking') router.push(`/(admin)/bookings/${report.targetId}` as never);
     else router.push('/(admin)/reviews' as never);
   }
 
@@ -123,7 +125,9 @@ export default function Reports() {
               </View>
               {item.details ? <Text style={styles.details}>{item.details}</Text> : null}
               <Text style={styles.meta}>
-                Denunciado: {names[item.targetId] ?? item.targetId.slice(0, 8)} · por {names[item.reporterId] ?? 'usuario'}
+                {item.targetType === 'booking'
+                  ? `Reserva ${item.targetId.slice(0, 8)} · reportado por ${names[item.reporterId] ?? 'usuario'}`
+                  : `Denunciado: ${names[item.targetId] ?? item.targetId.slice(0, 8)} · por ${names[item.reporterId] ?? 'usuario'}`}
               </Text>
               {item.adminNote ? <Text style={styles.meta}>Nota: {item.adminNote}</Text> : null}
               <View style={styles.actions}>
