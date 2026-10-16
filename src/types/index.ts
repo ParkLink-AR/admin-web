@@ -190,6 +190,7 @@ export interface FailedRefund {
 export type RefundResolution = 'refunded_manually' | 'discarded';
 
 export type PayoutStatus = 'PENDING' | 'PAID';
+export type PayoutKind = 'BOOKING' | 'OVERSTAY';
 
 export interface Payout {
   id: string;
@@ -198,6 +199,9 @@ export interface Payout {
   grossAmount: number; // centavos
   commissionAmount: number; // centavos
   netAmount: number; // centavos
+  // BOOKING: the owner's share of the booking. OVERSTAY: what ParkLink pays them for the driver staying past
+  // its end (the driver's debt covers it).
+  kind: PayoutKind;
   status: PayoutStatus;
   paidAt: string | null;
   paidByAdminId: string | null;
@@ -228,6 +232,7 @@ export interface SettlementPayout {
   grossAmount: number; // centavos
   commissionAmount: number; // centavos
   netAmount: number; // centavos
+  kind: PayoutKind;
 }
 
 // Batched payout to an owner -- replaces per-payout mark-paid. Drafted via
@@ -350,6 +355,8 @@ export interface AdminBooking {
   amount: number;
   ownerAmount: number | null;
   refundedAmount: number;
+  /** centavos -- what the payment charged on top of `amount`: the driver's pending balances it took on. */
+  debtAmount: number;
   paymentId: string | null;
   paidAt: string | null;
   cancellationReason: string | null;
@@ -478,4 +485,37 @@ export interface Broadcast {
   audience: BroadcastAudience;
   recipients: number;
   createdAt: string;
+}
+
+/** How a verified hourly booking ended (or still waits to): see booking-service's exit endpoints. */
+export interface AdminBookingExit {
+  /** True while the vehicle's departure still has to be recorded. */
+  awaiting: boolean;
+  exitedAt: string | null;
+  /** OWNER_CODE: the owner entered the driver's code. SUPPORT: someone here recorded it. */
+  closedBy: 'OWNER_CODE' | 'SUPPORT' | null;
+  /** How long past the booking's end the vehicle stayed. */
+  overstayMinutes: number;
+  /** How much of it is charged: all of it once it went past the grace period, none before. */
+  chargedMinutes: number;
+  /** centavos: what the driver owes, and what the owner is owed, for the charged minutes. */
+  overstayAmount: number;
+  overstayOwnerAmount: number;
+}
+
+/** What a driver owes for staying past the end of a booking: charged on their next reservation. */
+export interface AdminBookingDebt {
+  id: string;
+  /** PENDING: the next booking takes it on. RESERVED: it is on a booking still awaiting payment. PAID. */
+  status: 'PENDING' | 'RESERVED' | 'PAID';
+  /** centavos */
+  amount: number;
+  /** Minutes past the end that were charged. */
+  minutes: number;
+  /** The booking that was overstayed. */
+  bookingId: string;
+  /** The booking whose payment includes it, once one does. */
+  chargedBookingId: string | null;
+  createdAt: string;
+  paidAt: string | null;
 }

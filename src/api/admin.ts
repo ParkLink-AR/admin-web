@@ -7,7 +7,7 @@ import {
   AdminAccountRole,
   AdminUserDetail,
   AdminUserSummary,
-  AdminBooking,
+  AdminBooking, AdminBookingDebt, AdminBookingExit,
   AdminBookingFilters,
   AdminMetrics,
   AdminPayment,
@@ -17,6 +17,7 @@ import {
   Broadcast,
   BroadcastAudience,
   PayoutInfoChange,
+  PayoutKind,
   ReportStatus,
   UserReport,
   BookingKind,
@@ -480,6 +481,7 @@ interface PayoutResponse {
   gross_amount: number;
   commission_amount: number;
   net_amount: number;
+  kind?: PayoutKind;
   status: PayoutStatus;
   paid_at?: string | null;
   paid_by_admin_id?: string | null;
@@ -496,6 +498,7 @@ function toPayout(p: PayoutResponse): Payout {
     grossAmount: p.gross_amount,
     commissionAmount: p.commission_amount,
     netAmount: p.net_amount,
+    kind: p.kind ?? 'BOOKING',
     status: p.status,
     paidAt: p.paid_at ?? null,
     paidByAdminId: p.paid_by_admin_id ?? null,
@@ -543,6 +546,7 @@ interface SettlementPayoutResponse {
   gross_amount: number;
   commission_amount: number;
   net_amount: number;
+  kind?: PayoutKind;
 }
 
 function toSettlementPayout(p: SettlementPayoutResponse): SettlementPayout {
@@ -552,6 +556,7 @@ function toSettlementPayout(p: SettlementPayoutResponse): SettlementPayout {
     grossAmount: p.gross_amount,
     commissionAmount: p.commission_amount,
     netAmount: p.net_amount,
+    kind: p.kind ?? 'BOOKING',
   };
 }
 
@@ -898,6 +903,7 @@ interface AdminBookingResponse {
   amount: number;
   owner_amount?: number;
   refunded_amount: number;
+  debt_amount?: number;
   payment_id?: string;
   paid_at?: string;
   cancellation_reason?: string;
@@ -926,6 +932,7 @@ function toAdminBooking(b: AdminBookingResponse): AdminBooking {
     amount: b.amount,
     ownerAmount: b.owner_amount ?? null,
     refundedAmount: b.refunded_amount,
+    debtAmount: b.debt_amount ?? 0,
     paymentId: b.payment_id ?? null,
     paidAt: b.paid_at ?? null,
     cancellationReason: b.cancellation_reason ?? null,
@@ -995,6 +1002,72 @@ export async function adminRefundBooking(
     { method: 'POST', body: JSON.stringify({ amount, note }) },
   );
   return { booking: toAdminBooking(res.booking), absorbedByParkLink: res.absorbed_by_parklink };
+}
+
+interface AdminBookingDebtResponse {
+  id: string;
+  status: 'PENDING' | 'RESERVED' | 'PAID';
+  amount: number;
+  minutes: number;
+  booking_id: string;
+  charged_booking_id?: string;
+  created_at: string;
+  paid_at?: string;
+}
+
+/** The balances a booking is part of: the one it caused by being overstayed and the ones its payment included. */
+export async function getBookingDebts(bookingId: string): Promise<AdminBookingDebt[]> {
+  const response = await request<{ debts: AdminBookingDebtResponse[] }>(`/admin/bookings/${encodeURIComponent(bookingId)}/debts`);
+  return response.debts.map((debt) => ({
+    id: debt.id,
+    status: debt.status,
+    amount: debt.amount,
+    minutes: debt.minutes,
+    bookingId: debt.booking_id,
+    chargedBookingId: debt.charged_booking_id ?? null,
+    createdAt: debt.created_at,
+    paidAt: debt.paid_at ?? null,
+  }));
+}
+
+interface AdminBookingExitResponse {
+  awaiting: boolean;
+  exited_at?: string;
+  closed_by?: 'OWNER_CODE' | 'SUPPORT';
+  overstay_minutes: number;
+  charged_minutes: number;
+  overstay_amount?: number;
+  overstay_owner_amount?: number;
+}
+
+function toAdminBookingExit(e: AdminBookingExitResponse): AdminBookingExit {
+  return {
+    awaiting: e.awaiting,
+    exitedAt: e.exited_at ?? null,
+    closedBy: e.closed_by ?? null,
+    overstayMinutes: e.overstay_minutes,
+    chargedMinutes: e.charged_minutes,
+    overstayAmount: e.overstay_amount ?? 0,
+    overstayOwnerAmount: e.overstay_owner_amount ?? 0,
+  };
+}
+
+/** Where a booking's exit stands: still waiting for the owner to enter the driver's code, or when the vehicle left. */
+export async function getBookingExit(bookingId: string): Promise<AdminBookingExit> {
+  return toAdminBookingExit(await request<AdminBookingExitResponse>(`/admin/bookings/${encodeURIComponent(bookingId)}/exit`));
+}
+
+/**
+ * Records when the vehicle left a booking whose exit code never got entered, and completes it.
+ * `exitedAt` is RFC3339; it can't be before the booking started nor in the future.
+ */
+export async function adminCloseBooking(bookingId: string, exitedAt: string): Promise<AdminBookingExit> {
+  return toAdminBookingExit(
+    await request<AdminBookingExitResponse>(`/admin/bookings/${encodeURIComponent(bookingId)}/close`, {
+      method: 'POST',
+      body: JSON.stringify({ exited_at: exitedAt }),
+    }),
+  );
 }
 
 // ---------------------------------------------------------------------------

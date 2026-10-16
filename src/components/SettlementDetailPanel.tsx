@@ -251,7 +251,9 @@ export function SettlementDetailPanel({ settlementId, onConfirmed, onCancelled }
             <Text style={styles.sectionTitle}>Reservas incluidas ({settlement.payouts.length})</Text>
             {settlement.payouts.map((p) => (
               <View key={p.id} style={styles.payoutRow}>
-                <Text style={styles.payoutBooking}>Reserva: {p.bookingId}</Text>
+                <Text style={styles.payoutBooking}>
+                  Reserva: {p.bookingId}{p.kind === 'OVERSTAY' ? ' · exceso de tiempo' : ''}
+                </Text>
                 <Text style={styles.payoutAmount}>{formatCentavos(p.netAmount)}</Text>
               </View>
             ))}

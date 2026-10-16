@@ -15,15 +15,17 @@ import { formatCentavos } from '@/src/services/money';
 import { formatShortDateTime } from '@/src/services/dates';
 import { CANCELLATION_TEXT } from '@/src/services/labels';
 import {
-  adminCancelBooking, adminRefundBooking, getAdminBooking, getBookingChat, getParkingSpotById, getUserDetail,
+  adminCancelBooking, adminCloseBooking, adminRefundBooking, getAdminBooking, getBookingChat, getBookingDebts, getBookingExit,
+  getParkingSpotById, getUserDetail,
 } from '@/src/api/admin';
 import { ApiError } from '@/src/api/client';
-import { AdminBooking, AdminUserDetail, BookingChatMessage, ParkingSpot } from '@/src/types';
+import { AdminBooking, AdminBookingDebt, AdminBookingExit, AdminUserDetail, BookingChatMessage, ParkingSpot } from '@/src/types';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
 
 // Statuses a booking can still be cancelled from (it holds its slot).
+const DEBT_STATUS = { PENDING: 'pendiente', RESERVED: 'en una reserva sin pagar', PAID: 'pagado' } as const;
 const CANCELLABLE = new Set(['PENDING_PAYMENT', 'PENDING_OWNER_APPROVAL', 'CONFIRMED', 'IN_PROGRESS']);
 // A finished (or running) paid booking is refunded instead.
 const REFUNDABLE = new Set(['COMPLETED', 'IN_PROGRESS']);
@@ -42,6 +44,8 @@ export default function BookingDetail() {
   const [notice, setNotice] = useState<string | null>(null);
   const [action, setAction] = useState<ActionModalConfig | null>(null);
   const [pendingReview, setPendingReview] = useState<PendingVerificationDecision | null>(null);
+  const [exit, setExit] = useState<AdminBookingExit | null>(null);
+  const [debts, setDebts] = useState<AdminBookingDebt[]>([]);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -49,11 +53,16 @@ export default function BookingDetail() {
     try {
       const loaded = await getAdminBooking(id);
       setBooking(loaded);
-      const [spotResult, driverResult, chatResult] = await Promise.allSettled([
+      const [spotResult, driverResult, chatResult, exitResult, debtsResult] = await Promise.allSettled([
         getParkingSpotById(loaded.parkingSpotId),
         getUserDetail(loaded.userId),
         getBookingChat(loaded.id),
+        // Only a verified hourly booking has an exit to look at.
+        loaded.kind === 'HOURLY' && loaded.verifiedAt ? getBookingExit(loaded.id) : Promise.reject(new Error('no exit')),
+        getBookingDebts(loaded.id),
       ]);
+      setDebts(debtsResult.status === 'fulfilled' ? debtsResult.value : []);
+      setExit(exitResult.status === 'fulfilled' ? exitResult.value : null);
       if (driverResult.status === 'fulfilled') setDriver(driverResult.value);
       setChat(chatResult.status === 'fulfilled' ? chatResult.value : []);
       if (spotResult.status === 'fulfilled') {
@@ -93,20 +102,26 @@ export default function BookingDetail() {
 
   const paid = !!booking.paidAt;
   const refundable = booking.amount - booking.refundedAmount;
+  // What the driver paid includes the pending balances the booking took on: cancelling with a full refund
+  // gives all of it back (they owe those balances again); a refund of the booking alone leaves them paid.
+  const paidTotal = booking.amount + booking.debtAmount;
   const canCancel = CANCELLABLE.has(booking.status);
   const canRefund = paid && REFUNDABLE.has(booking.status) && refundable > 0;
   const awaitingReview = booking.verificationReview === 'PENDING';
+  // A verified hourly booking whose time is over but whose exit code never got entered stays in
+  // progress: support records when the vehicle left.
+  const canClose = !!exit?.awaiting && new Date(booking.end).getTime() <= Date.now();
 
   function openCancel() {
     if (!booking) return;
     setAction({
       title: 'Cancelar la reserva',
       description: paid
-        ? 'La reserva se cancela y el horario queda libre. Elegí cuánto se le devuelve al conductor (por defecto, todo lo que pagó). A los dos les llega un aviso.'
+        ? `La reserva se cancela y el horario queda libre. Elegí cuánto se le devuelve al conductor (por defecto, todo lo que pagó). A los dos les llega un aviso.${booking.debtAmount > 0 ? ' Lo que pagó incluye un saldo pendiente de reservas anteriores: si le devolvés todo, vuelve a deberlo.' : ''}`
         : 'La reserva no está pagada: se cancela sin reembolso y el horario queda libre.',
       confirmLabel: 'Cancelar reserva',
       variant: 'danger',
-      amount: paid ? { label: 'Reembolso al conductor ($)', max: booking.amount / 100, defaultAmount: booking.amount / 100 } : undefined,
+      amount: paid ? { label: 'Reembolso al conductor ($)', max: paidTotal / 100, defaultAmount: paidTotal / 100 } : undefined,
       onConfirm: async (note, amountPesos) => {
         const updated = await adminCancelBooking(
           booking.id, note, amountPesos === null ? undefined : Math.round(amountPesos * 100),
@@ -117,6 +132,28 @@ export default function BookingDetail() {
             ? `Reserva cancelada. Se le devuelven ${formatCentavos(updated.refundedAmount)} al conductor.`
             : 'Reserva cancelada.',
         );
+      },
+    });
+  }
+
+  function openClose() {
+    if (!booking) return;
+    setAction({
+      title: 'Registrar la salida',
+      description:
+        'Dejá anotado cuándo se fue el vehículo y se cierra la reserva. Si se quedó más de 15 minutos después del fin, se calcula el exceso: lo que debe el conductor y lo que le corresponde al propietario. Queda registrado quién lo hizo.',
+      confirmLabel: 'Registrar salida',
+      dateTime: { label: 'Hora de salida (Buenos Aires)', defaultValue: `${booking.end.slice(0, 10)} ${booking.end.slice(11, 16)}` },
+      onConfirm: async (_note, _amount, dateTime) => {
+        if (!dateTime) return;
+        const closed = await adminCloseBooking(booking.id, `${dateTime.slice(0, 10)}T${dateTime.slice(11, 16)}:00-03:00`);
+        setExit(closed);
+        setNotice(
+          closed.chargedMinutes > 0
+            ? `Salida registrada. Se pasó ${closed.chargedMinutes} min: exceso de ${formatCentavos(closed.overstayAmount)} al conductor y ${formatCentavos(closed.overstayOwnerAmount)} al propietario.`
+            : 'Salida registrada.',
+        );
+        load();
       },
     });
   }
@@ -171,7 +208,8 @@ export default function BookingDetail() {
           </View>
           <Text style={styles.caption}>ID: {booking.id}</Text>
           <DataRow label="Tipo" value={booking.kind === 'HOURLY' ? 'Por hora' : 'Estadía'} />
-          <DataRow label="Pagó el conductor" value={formatCentavos(booking.amount)} />
+          <DataRow label="Pagó el conductor" value={formatCentavos(booking.amount + booking.debtAmount)} />
+          {booking.debtAmount > 0 ? <DataRow label="Incluye saldo pendiente de otras reservas" value={formatCentavos(booking.debtAmount)} /> : null}
           {booking.ownerAmount !== null ? <DataRow label="Le corresponde al propietario" value={formatCentavos(booking.ownerAmount)} /> : null}
           {booking.refundedAmount > 0 ? <DataRow label="Reembolsado al conductor" value={formatCentavos(booking.refundedAmount)} /> : null}
           {booking.vehiclePlate ? (
@@ -196,7 +234,50 @@ export default function BookingDetail() {
           <DataRow label="Creada" value={formatShortDateTime(booking.createdAt)} />
         </Card>
 
-        {canCancel || canRefund || awaitingReview ? (
+        {debts.length > 0 ? (
+          <Card>
+            <Text style={styles.sectionTitle}>Saldos por exceso de tiempo</Text>
+            {debts.map((debt) => (
+              <View key={debt.id} style={{ paddingVertical: 4 }}>
+                <DataRow
+                  label={debt.bookingId === booking.id ? 'Lo generó esta reserva' : 'Se cobró en esta reserva'}
+                  value={`${formatCentavos(debt.amount)} · ${debt.minutes} min · ${DEBT_STATUS[debt.status]}`}
+                />
+              </View>
+            ))}
+            <Text style={styles.hint}>
+              El conductor lo paga junto con su próxima reserva. ParkLink le paga al propietario su parte aparte, sin esperar ese cobro.
+            </Text>
+          </Card>
+        ) : null}
+
+        {exit ? (
+          <Card>
+            <Text style={styles.sectionTitle}>Salida</Text>
+            {exit.exitedAt ? (
+              <>
+                <DataRow label="Se fue" value={formatShortDateTime(exit.exitedAt)} />
+                <DataRow label="Registrada por" value={exit.closedBy === 'SUPPORT' ? 'Soporte (a mano)' : 'El propietario, con el código del conductor'} />
+                <DataRow label="Se pasó del horario" value={exit.overstayMinutes > 0 ? `${exit.overstayMinutes} min` : 'No'} />
+                {exit.chargedMinutes > 0 ? (
+                  <>
+                    <DataRow label="Exceso al conductor" value={formatCentavos(exit.overstayAmount)} />
+                    <DataRow label="Exceso al propietario" value={formatCentavos(exit.overstayOwnerAmount)} />
+                  </>
+                ) : exit.overstayMinutes > 0 ? (
+                  <Text style={styles.hint}>Dentro de la tolerancia de 15 minutos: sin cargo.</Text>
+                ) : null}
+              </>
+            ) : exit.awaiting ? (
+              <Text style={styles.hint}>
+                Todavía no se registró la salida: el propietario tiene que cargar el código de salida del conductor.
+                {canClose ? ' Si el conductor ya se fue sin dárselo, registrala vos.' : ''}
+              </Text>
+            ) : null}
+          </Card>
+        ) : null}
+
+        {canCancel || canRefund || awaitingReview || canClose ? (
           <Card style={styles.actionsCard}>
             <Text style={styles.sectionTitle}>Acciones</Text>
             {awaitingReview ? (
@@ -218,6 +299,7 @@ export default function BookingDetail() {
                   />
                 </>
               ) : null}
+              {canClose ? <Button title="Registrar salida" onPress={openClose} /> : null}
               {canCancel ? <Button title="Cancelar reserva" variant="danger" onPress={openCancel} /> : null}
               {canRefund && !awaitingReview ? <Button title="Reembolsar" variant="secondary" onPress={openRefund} /> : null}
             </View>
