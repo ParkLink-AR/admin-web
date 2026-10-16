@@ -159,7 +159,9 @@ export default function OwnerPendingBalanceDetail() {
             payouts.map((p) => (
               <View key={p.id} style={styles.payoutRow}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.payoutBooking}>Reserva: {p.bookingId}</Text>
+                  <Text style={styles.payoutBooking}>
+                    Reserva: {p.bookingId}{p.kind === 'OVERSTAY' ? ' · exceso de tiempo' : ''}
+                  </Text>
                   <Text style={styles.caption}>Creado: {formatDate(p.createdAt)}</Text>
                 </View>
                 <Text style={styles.payoutAmount}>{formatCentavos(p.netAmount)}</Text>

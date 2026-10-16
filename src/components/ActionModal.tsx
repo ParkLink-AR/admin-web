@@ -17,8 +17,10 @@ export interface ActionModalConfig {
   noteOptional?: boolean;
   /** An amount in pesos (e.g. how much to refund), prefilled with `defaultAmount`. */
   amount?: { label: string; max: number; defaultAmount?: number };
+  /** A date and time in Buenos Aires ("2026-10-12 20:30"), prefilled with `defaultValue`. */
+  dateTime?: { label: string; defaultValue: string };
   /** Runs the action; throwing shows the error and keeps the modal open. */
-  onConfirm: (note: string, amountPesos: number | null) => Promise<void>;
+  onConfirm: (note: string, amountPesos: number | null, dateTime: string | null) => Promise<void>;
 }
 
 /**
@@ -28,6 +30,7 @@ export interface ActionModalConfig {
 export function ActionModal({ config, onClose }: { config: ActionModalConfig | null; onClose: () => void }) {
   const [note, setNote] = useState('');
   const [amount, setAmount] = useState('');
+  const [dateTime, setDateTime] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -36,6 +39,7 @@ export function ActionModal({ config, onClose }: { config: ActionModalConfig | n
     setError(null);
     setBusy(false);
     setAmount(config?.amount?.defaultAmount !== undefined ? String(config.amount.defaultAmount) : '');
+    setDateTime(config?.dateTime?.defaultValue ?? '');
   }, [config]);
 
   if (!config) return null;
@@ -45,13 +49,14 @@ export function ActionModal({ config, onClose }: { config: ActionModalConfig | n
     ? !Number.isFinite(parsedAmount) || (parsedAmount ?? 0) < 0 || (parsedAmount ?? 0) > config.amount.max
     : false;
   const noteMissing = !config.noteOptional && !note.trim();
+  const dateTimeInvalid = config.dateTime ? !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}$/.test(dateTime.trim()) : false;
 
   async function confirm() {
-    if (!config || busy || noteMissing || amountInvalid) return;
+    if (!config || busy || noteMissing || amountInvalid || dateTimeInvalid) return;
     setBusy(true);
     setError(null);
     try {
-      await config.onConfirm(note.trim(), parsedAmount);
+      await config.onConfirm(note.trim(), parsedAmount, config.dateTime ? dateTime.trim() : null);
       onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.detail : 'No se pudo completar la acción.');
@@ -83,6 +88,19 @@ export function ActionModal({ config, onClose }: { config: ActionModalConfig | n
                   ) : null}
                 </View>
               ) : null}
+              {config.dateTime ? (
+                <View style={styles.field}>
+                  <Text style={styles.label}>{config.dateTime.label}</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={dateTime}
+                    onChangeText={setDateTime}
+                    placeholder="AAAA-MM-DD HH:MM"
+                    placeholderTextColor={colors.textSecondary}
+                  />
+                  {dateTimeInvalid ? <Text style={styles.error}>Tiene que ser como 2026-10-12 20:30 (hora de Buenos Aires).</Text> : null}
+                </View>
+              ) : null}
               <View style={styles.field}>
                 <Text style={styles.label}>{config.noteOptional ? 'Nota (opcional)' : 'Motivo'}</Text>
                 <TextInput
@@ -108,7 +126,7 @@ export function ActionModal({ config, onClose }: { config: ActionModalConfig | n
                   variant={config.variant ?? 'primary'}
                   onPress={confirm}
                   loading={busy}
-                  disabled={noteMissing || amountInvalid}
+                  disabled={noteMissing || amountInvalid || dateTimeInvalid}
                 />
               </View>
             </View>
