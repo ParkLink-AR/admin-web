@@ -7,22 +7,14 @@ import { Card } from '@/src/components/Card';
 import { PageHeader } from '@/src/components/PageHeader';
 import { colors } from '@/src/theme/colors';
 import { useSessionStore } from '@/src/store/useSessionStore';
-import { ADMIN_SECTION_GROUPS, AdminSection, sectionsFor } from '@/src/navigation';
-import {
-  countFailedRefunds,
-  countPendingReports,
-  getOwnerPendingBalances,
-  listPendingParkingSpots,
-  listSettlements,
-  listUnverifiedBookings,
-} from '@/src/api/admin';
+import { getOwnerPendingBalances } from '@/src/api/admin';
+import { PendingCount, usePendingCounts } from '@/src/hooks/usePendingCounts';
 import { formatCentavos } from '@/src/services/money';
 import { MetricsPanel } from '@/src/components/MetricsPanel';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 
-// One loaded figure for the "Para atender ahora" row: undefined while loading, null if
-// its request failed (each one loads on its own, so one failing doesn't blank the rest).
+// A loaded figure: undefined while loading, null if its request failed.
 type Figure<T> = T | null | undefined;
 
 function useFigure<T>(load: () => Promise<T>): Figure<T> {
@@ -46,7 +38,7 @@ function hoverable(hovered: boolean | undefined) {
 }
 
 function PendingTile({ count, label, detail, icon, href }: {
-  count: Figure<number>;
+  count: PendingCount;
   label: string;
   detail?: string;
   icon: keyof typeof Ionicons.glyphMap;
@@ -78,34 +70,40 @@ function PendingTile({ count, label, detail, icon, href }: {
   );
 }
 
-function SectionRow({ section }: { section: AdminSection }) {
+// The line above the tiles: how many things wait, in how many sections -- or that all is done.
+function Summary({ counts }: { counts: PendingCount[] }) {
+  if (counts.some((count) => count === undefined)) return null;
+  const waiting = counts.filter((count): count is number => typeof count === 'number' && count > 0);
+  const total = waiting.reduce((sum, count) => sum + count, 0);
+  const failed = counts.some((count) => count === null);
+  const done = total === 0;
   return (
-    <Pressable
-      onPress={() => router.push(section.href as never)}
-      style={({ hovered }: PressableState) => [styles.sectionRow, ...hoverable(hovered)]}
-    >
-      <View style={styles.sectionIcon}>
-        <Ionicons name={section.icon} size={18} color={colors.teal} />
-      </View>
+    <Card style={done ? { ...styles.summary, ...styles.summaryDone } : styles.summary}>
+      <Ionicons name={done ? 'checkmark-circle' : 'notifications'} size={22} color={done ? colors.success : colors.warning} />
       <View style={{ flex: 1 }}>
-        <Text style={styles.sectionLabel}>{section.label}</Text>
-        <Text style={styles.sectionDescription}>{section.description}</Text>
+        <Text style={styles.summaryTitle}>
+          {done
+            ? 'Todo al día: no hay nada esperando'
+            : `${total} ${total === 1 ? 'cosa para atender' : 'cosas para atender'}${
+                waiting.length > 1 ? ` en ${waiting.length} secciones` : ''
+              }`}
+        </Text>
+        <Text style={styles.summaryDetail}>
+          {failed
+            ? 'Alguna sección no se pudo cargar: la marcamos con «—».'
+            : done
+              ? 'Se actualiza solo cada minuto.'
+              : 'Las secciones con algo pendiente están marcadas abajo y con su número en el menú.'}
+        </Text>
       </View>
-      <Ionicons name="chevron-forward" size={16} color={colors.textSecondary} />
-    </Pressable>
+    </Card>
   );
 }
 
 export default function Home() {
   const user = useSessionStore((s) => s.user);
-  const sections = sectionsFor(user?.role).filter((section) => section.group);
-
-  const spotsToReview = useFigure(() => listPendingParkingSpots().then((r) => r.length));
-  const unverified = useFigure(() => listUnverifiedBookings().then((r) => r.length));
+  const counts = usePendingCounts();
   const balances = useFigure(getOwnerPendingBalances);
-  const draftSettlements = useFigure(() => listSettlements('PENDING').then((r) => r.length));
-  const failedRefunds = useFigure(countFailedRefunds);
-  const pendingReports = useFigure(countPendingReports);
 
   const balancesTotal = balances ? balances.reduce((sum, b) => sum + b.pendingNetAmount, 0) : 0;
 
@@ -114,29 +112,53 @@ export default function Home() {
       <ScrollView contentContainerStyle={styles.body}>
         <PageHeader title={`Hola, ${user?.username ?? ''}`} subtitle="Panel de administración de ParkLink" />
 
-        <Card style={styles.intro}>
-          <Text style={styles.introText}>
-            Desde acá el equipo de ParkLink mantiene la plataforma funcionando: revisa las cocheras nuevas antes de
-            que aparezcan en las búsquedas, resuelve las reservas que terminaron sin que el dueño verificara la
-            llegada del conductor y les paga a los dueños lo que ganaron con sus cocheras.
-          </Text>
-        </Card>
+        <Summary
+          counts={[counts.spotReview, counts.unverified, counts.tickets, counts.reports, counts.refunds, counts.settlements]}
+        />
 
         <Text style={styles.heading}>Para atender ahora</Text>
         <View style={styles.pendingRow}>
           <PendingTile
-            count={spotsToReview}
-            label="Cocheras por revisar"
+            count={counts.spotReview}
+            label="Cocheras nuevas"
             detail="Esperando aprobación para publicarse"
             icon="checkmark-done-circle"
             href="/(admin)/spot-review"
           />
           <PendingTile
-            count={unverified}
+            count={counts.unverified}
             label="Reservas sin verificar"
             detail="Con el pago al dueño retenido"
             icon="alert-circle"
             href="/(admin)/unverified"
+          />
+          <PendingTile
+            count={counts.tickets}
+            label="Soporte sin responder"
+            detail="Tickets esperando respuesta de ParkLink"
+            icon="chatbubbles"
+            href="/(admin)/support"
+          />
+          <PendingTile
+            count={counts.reports}
+            label="Denuncias sin resolver"
+            detail="Cocheras, usuarios o reseñas"
+            icon="flag"
+            href="/(admin)/reports"
+          />
+          <PendingTile
+            count={counts.refunds}
+            label="Reembolsos pendientes"
+            detail="Mercado Pago no los pudo hacer"
+            icon="arrow-undo-circle"
+            href="/(admin)/refunds"
+          />
+          <PendingTile
+            count={counts.settlements}
+            label="Liquidaciones sin confirmar"
+            detail="Preparadas, falta la transferencia"
+            icon="receipt"
+            href="/(admin)/settlements"
           />
           <PendingTile
             count={balances === undefined || balances === null ? balances : balances.length}
@@ -145,47 +167,10 @@ export default function Home() {
             icon="cash"
             href="/(admin)/payouts"
           />
-          <PendingTile
-            count={failedRefunds}
-            label="Reembolsos pendientes"
-            detail="Mercado Pago no los pudo hacer"
-            icon="arrow-undo-circle"
-            href="/(admin)/refunds"
-          />
-          <PendingTile
-            count={draftSettlements}
-            label="Liquidaciones sin confirmar"
-            detail="Preparadas, falta la transferencia"
-            icon="receipt"
-            href="/(admin)/settlements"
-          />
-          <PendingTile
-            count={pendingReports}
-            label="Denuncias sin resolver"
-            detail="Cocheras, usuarios o reseñas"
-            icon="flag"
-            href="/(admin)/reports"
-          />
         </View>
 
         <Text style={styles.heading}>Métricas</Text>
         <MetricsPanel />
-
-        <Text style={styles.heading}>Secciones</Text>
-        <View style={styles.groups}>
-          {ADMIN_SECTION_GROUPS.map((group) => {
-            const items = sections.filter((section) => section.group === group);
-            if (items.length === 0) return null;
-            return (
-              <Card key={group} style={styles.group}>
-                <Text style={styles.groupTitle}>{group}</Text>
-                {items.map((section) => (
-                  <SectionRow key={section.href} section={section} />
-                ))}
-              </Card>
-            );
-          })}
-        </View>
       </ScrollView>
     </Screen>
   );
@@ -196,8 +181,10 @@ const styles = StyleSheet.create({
   body: { padding: 24, gap: 14, maxWidth: 1100, width: '100%', alignSelf: 'center' },
   hovered: { transform: [{ translateY: -1 }], opacity: 0.92 },
 
-  intro: { borderLeftWidth: 4, borderLeftColor: colors.teal },
-  introText: { fontSize: 14, lineHeight: 22, color: colors.text },
+  summary: { flexDirection: 'row', alignItems: 'center', gap: 12, borderLeftWidth: 4, borderLeftColor: colors.warning },
+  summaryDone: { borderLeftColor: colors.success },
+  summaryTitle: { fontSize: 15, fontWeight: '700', color: colors.text },
+  summaryDetail: { fontSize: 12, color: colors.textSecondary, marginTop: 2 },
 
   heading: { fontSize: 13, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase', letterSpacing: 0.6, marginTop: 10 },
 
@@ -211,13 +198,4 @@ const styles = StyleSheet.create({
   pendingLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
   pendingDetail: { fontSize: 12, color: colors.textSecondary },
   pendingDetailDone: { color: colors.success, fontWeight: '600' },
-
-
-  groups: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, alignItems: 'flex-start' },
-  group: { flexGrow: 1, flexBasis: 320, minWidth: 260, gap: 2 },
-  groupTitle: { fontSize: 15, fontWeight: '700', color: colors.text, marginBottom: 4 },
-  sectionRow: { flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8, borderRadius: 8 },
-  sectionIcon: { width: 34, height: 34, borderRadius: 9, backgroundColor: '#E6F4F4', alignItems: 'center', justifyContent: 'center' },
-  sectionLabel: { fontSize: 14, fontWeight: '600', color: colors.text },
-  sectionDescription: { fontSize: 12, color: colors.textSecondary },
 });
