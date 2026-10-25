@@ -69,6 +69,9 @@ export interface ParkingSpot {
   pricePerDay: number | null;
   pricePerWeek: number | null;
   pricePerMonth: number | null;
+  // "Media estadía (12 h)", off unless the owner turned it on.
+  halfDayEnabled?: boolean;
+  pricePerHalfDay?: number | null;
   covered: boolean;
   vehicleTypes: string[];
   capacity: number;
@@ -96,7 +99,9 @@ export type BookingStatus =
   | 'PENDING_OWNER_APPROVAL'
   | 'IN_PROGRESS';
 
-export type BookingKind = 'HOURLY' | 'STAY';
+// HALF_DAY: "media estadía", 12 hours at a closed price (priced like a stay, ended with the exit
+// code like an hourly booking).
+export type BookingKind = 'HOURLY' | 'STAY' | 'HALF_DAY';
 
 // A booking this user made as a driver -- GET /users/{id}/bookings/history.
 export interface DriverBooking {

@@ -17,6 +17,7 @@ import {
 } from '@/src/api/admin';
 import { ApiError } from '@/src/api/client';
 import { AdminUserDetail, SupportTicketDetail, SupportTicketMessage, TicketStatus } from '@/src/types';
+import { bookingKindText } from '@/src/services/labels';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
@@ -225,7 +226,7 @@ export default function SupportTicketPage() {
           {formatShortDateTime(ticket.bookingStart)} → {formatShortDateTime(ticket.bookingEnd)}
         </Text>
         <Text style={styles.caption}>
-          {ticket.bookingKind === 'STAY' ? 'Estadía' : 'Por hora'} · {formatCentavos(ticket.bookingAmount)}
+          {bookingKindText(ticket.bookingKind)} · {formatCentavos(ticket.bookingAmount)}
         </Text>
         <BookingStatusBadge status={ticket.bookingStatus} />
         <Pressable onPress={openBooking} style={({ hovered }: PressableState) => [styles.linkRow, hovered && styles.hovered, CURSOR_POINTER]}>

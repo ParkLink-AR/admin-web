@@ -231,6 +231,9 @@ export default function SpotDetail() {
           {spot.stayEnabled && spot.pricePerMonth != null ? (
             <DataRow label="Por mes" value={`$${spot.pricePerMonth.toLocaleString('es-AR')}`} />
           ) : null}
+          {spot.stayEnabled && spot.halfDayEnabled && spot.pricePerHalfDay != null ? (
+            <DataRow label="Media estadía (12 h)" value={`$${spot.pricePerHalfDay.toLocaleString('es-AR')}`} />
+          ) : null}
           {!spot.hourlyEnabled && !spot.stayEnabled ? (
             <Text style={styles.hint}>Sin precio configurado</Text>
           ) : null}

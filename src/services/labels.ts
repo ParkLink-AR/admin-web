@@ -1,4 +1,4 @@
-import { BookingStatus } from '@/src/types';
+import { BookingKind, BookingStatus } from '@/src/types';
 
 /** Why a booking was cancelled, in words. */
 export const CANCELLATION_TEXT: Record<string, string> = {
@@ -21,3 +21,20 @@ export const BOOKING_STATUS_TEXT: Record<BookingStatus, string> = {
   CANCELLED: 'Cancelada',
   EXPIRED: 'Expirada',
 };
+
+/** What kind of booking it is, in words. */
+export const BOOKING_KIND_TEXT: Record<BookingKind, string> = {
+  HOURLY: 'Por hora',
+  STAY: 'Estadía',
+  HALF_DAY: 'Media estadía (12 h)',
+};
+
+export function bookingKindText(kind: BookingKind | string | undefined): string {
+  return BOOKING_KIND_TEXT[(kind ?? 'HOURLY') as BookingKind] ?? 'Por hora';
+}
+
+/** Whether a booking of this kind ends with the exit code once its arrival was verified --
+ * hourly bookings and half-days (see booking-service's BookingKind.TracksExit). */
+export function tracksExit(kind: BookingKind | string | undefined): boolean {
+  return kind === 'HOURLY' || kind === 'HALF_DAY';
+}

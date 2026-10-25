@@ -21,6 +21,7 @@ import { ApiError } from '@/src/api/client';
 import { AccountStatusCard } from '@/src/components/AccountStatusCard';
 import { useIsDesktop } from '@/src/hooks/useIsDesktop';
 import { formatShortDateTime } from '@/src/services/dates';
+import { bookingKindText } from '@/src/services/labels';
 
 type Tab = 'spots' | 'made' | 'received';
 type PressableState = { pressed: boolean; hovered?: boolean };
@@ -349,7 +350,7 @@ function BookingRow({ booking }: { booking: DriverBooking | OwnerReceivedBooking
             {formatDate(booking.start)} → {formatDate(booking.end)}
           </Text>
           <Text style={styles.caption}>
-            {booking.kind === 'HOURLY' ? 'Por hora' : 'Estadía'} · {formatCentavos(booking.amount)}
+            {bookingKindText(booking.kind)} · {formatCentavos(booking.amount)}
           </Text>
           {booking.cancellationReason ? (
             <Text style={styles.caption}>Motivo: {booking.cancellationReason}</Text>

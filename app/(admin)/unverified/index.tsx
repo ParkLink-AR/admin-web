@@ -14,6 +14,7 @@ import { getParkingSpotById, getUserDetail, listUnverifiedBookings } from '@/src
 import { AdminUserDetail, ParkingSpot, UnverifiedBooking } from '@/src/types';
 import { ApiError } from '@/src/api/client';
 import { formatShortDateTime } from '@/src/services/dates';
+import { bookingKindText } from '@/src/services/labels';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
@@ -130,7 +131,7 @@ export default function UnverifiedBookings() {
                 </View>
                 {spot ? <Text style={styles.caption}>{spot.address}</Text> : null}
                 <Text style={styles.caption}>
-                  {formatShortDateTime(item.start)} → {formatShortDateTime(item.end)} · {item.kind === 'HOURLY' ? 'Por hora' : 'Estadía'}
+                  {formatShortDateTime(item.start)} → {formatShortDateTime(item.end)} · {bookingKindText(item.kind)}
                   {item.vehiclePlate ? ` · Patente ${item.vehiclePlate}` : ''}
                   {item.ownerAmount != null ? ` · Al dueño: ${formatCentavos(item.ownerAmount)}` : ''}
                 </Text>

@@ -10,7 +10,7 @@ import { BookingStatusBadge } from '@/src/components/Badge';
 import { colors } from '@/src/theme/colors';
 import { formatCentavos } from '@/src/services/money';
 import { formatShortDateTime } from '@/src/services/dates';
-import { BOOKING_STATUS_TEXT, CANCELLATION_TEXT } from '@/src/services/labels';
+import { BOOKING_STATUS_TEXT, CANCELLATION_TEXT, bookingKindText } from '@/src/services/labels';
 import { centavosToDecimal, downloadCsv } from '@/src/services/csv';
 import { searchBookings } from '@/src/api/admin';
 import { ApiError } from '@/src/api/client';
@@ -92,7 +92,7 @@ export default function Bookings() {
       downloadCsv(`reservas-${new Date().toISOString().slice(0, 10)}.csv`, all, [
         { header: 'ID', value: (b) => b.id },
         { header: 'Estado', value: (b) => BOOKING_STATUS_TEXT[b.status] ?? b.status },
-        { header: 'Tipo', value: (b) => (b.kind === 'STAY' ? 'Estadía' : 'Por hora') },
+        { header: 'Tipo', value: (b) => bookingKindText(b.kind) },
         { header: 'Desde', value: (b) => b.start },
         { header: 'Hasta', value: (b) => b.end },
         { header: 'Cochera (ID)', value: (b) => b.parkingSpotId },
@@ -179,7 +179,7 @@ export default function Bookings() {
                     {formatShortDateTime(item.start)} → {formatShortDateTime(item.end)}
                   </Text>
                   <Text style={styles.caption}>
-                    {item.kind === 'STAY' ? 'Estadía' : 'Por hora'}
+                    {bookingKindText(item.kind)}
                     {item.vehiclePlate ? ` · ${item.vehiclePlate}` : ''} · ID {item.id.slice(0, 8)}
                   </Text>
                   {item.cancellationReason ? (

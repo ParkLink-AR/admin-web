@@ -12,6 +12,7 @@ import { formatShortDate, formatShortDateTime } from '@/src/services/dates';
 import { getParkingSpotById, getUserDetail, listSupportTickets } from '@/src/api/admin';
 import { ApiError } from '@/src/api/client';
 import { AdminUserDetail, ParkingSpot, SupportTicketSummary, TicketStatus } from '@/src/types';
+import { bookingKindText } from '@/src/services/labels';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
@@ -156,7 +157,7 @@ export default function SupportTickets() {
                   </Text>
                   <Text style={styles.caption}>
                     {spot?.title ?? 'Cochera'} · {formatShortDate(item.booking.start)}
-                    {item.booking.kind === 'STAY' ? ` → ${formatShortDate(item.booking.end)} · Estadía` : ' · Por hora'}
+                    {item.booking.kind === 'STAY' ? ` → ${formatShortDate(item.booking.end)} · Estadía` : ` · ${bookingKindText(item.booking.kind)}`}
                   </Text>
                   <View style={styles.footer}>
                     {item.awaitingReply ? (

@@ -13,7 +13,7 @@ import { PendingVerificationDecision, VerificationDecisionModal } from '@/src/co
 import { colors } from '@/src/theme/colors';
 import { formatCentavos } from '@/src/services/money';
 import { formatShortDateTime } from '@/src/services/dates';
-import { CANCELLATION_TEXT } from '@/src/services/labels';
+import { CANCELLATION_TEXT, bookingKindText, tracksExit } from '@/src/services/labels';
 import {
   adminCancelBooking, adminCloseBooking, adminRefundBooking, getAdminBooking, getBookingChat, getBookingDebts, getBookingExit,
   getParkingSpotById, getUserDetail,
@@ -58,7 +58,7 @@ export default function BookingDetail() {
         getUserDetail(loaded.userId),
         getBookingChat(loaded.id),
         // Only a verified hourly booking has an exit to look at.
-        loaded.kind === 'HOURLY' && loaded.verifiedAt ? getBookingExit(loaded.id) : Promise.reject(new Error('no exit')),
+        tracksExit(loaded.kind) && loaded.verifiedAt ? getBookingExit(loaded.id) : Promise.reject(new Error('no exit')),
         getBookingDebts(loaded.id),
       ]);
       setDebts(debtsResult.status === 'fulfilled' ? debtsResult.value : []);
@@ -207,7 +207,7 @@ export default function BookingDetail() {
             <BookingStatusBadge status={booking.status} />
           </View>
           <Text style={styles.caption}>ID: {booking.id}</Text>
-          <DataRow label="Tipo" value={booking.kind === 'HOURLY' ? 'Por hora' : 'Estadía'} />
+          <DataRow label="Tipo" value={bookingKindText(booking.kind)} />
           <DataRow label="Pagó el conductor" value={formatCentavos(booking.amount + booking.debtAmount)} />
           {booking.debtAmount > 0 ? <DataRow label="Incluye saldo pendiente de otras reservas" value={formatCentavos(booking.debtAmount)} /> : null}
           {booking.ownerAmount !== null ? <DataRow label="Le corresponde al propietario" value={formatCentavos(booking.ownerAmount)} /> : null}

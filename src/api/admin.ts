@@ -210,6 +210,8 @@ interface ParkingSpotResponse {
   pricePerDay: number | null;
   pricePerWeek: number | null;
   pricePerMonth: number | null;
+  halfDayEnabled?: boolean;
+  pricePerHalfDay?: number | null;
   covered: boolean;
   vehicleTypes: string[];
   capacity: number;

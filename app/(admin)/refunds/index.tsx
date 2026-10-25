@@ -17,6 +17,7 @@ import {
 } from '@/src/api/admin';
 import { ApiError } from '@/src/api/client';
 import { AdminUserDetail, FailedRefund, ParkingSpot, RefundErrorCode, RefundResolution } from '@/src/types';
+import { bookingKindText } from '@/src/services/labels';
 
 type PressableState = { pressed: boolean; hovered?: boolean };
 const CURSOR_POINTER = { cursor: 'pointer' } as unknown as ViewStyle;
@@ -200,7 +201,7 @@ export default function FailedRefunds() {
                 {spot ? <Text style={styles.caption}>{spot.address}</Text> : null}
                 {b ? (
                   <Text style={styles.caption}>
-                    {formatShortDateTime(b.start)} → {formatShortDateTime(b.end)} · {b.kind === 'STAY' ? 'Estadía' : 'Por hora'}
+                    {formatShortDateTime(b.start)} → {formatShortDateTime(b.end)} · {bookingKindText(b.kind)}
                     {b.cancellationReason ? ` · ${CANCELLATION_TEXT[b.cancellationReason] ?? b.cancellationReason}` : ''}
                   </Text>
                 ) : (
