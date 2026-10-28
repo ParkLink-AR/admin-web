@@ -37,3 +37,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Local config, never in git (see .env.example)
+.env
